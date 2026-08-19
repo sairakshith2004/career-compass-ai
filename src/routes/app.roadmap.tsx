@@ -17,7 +17,7 @@ export const Route = createFileRoute("/app/roadmap")({
       },
     ],
   }),
-  component: Roadmap;
+  component: Roadmap,
 });
 
 const WEEKS = [
