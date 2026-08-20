@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
 import { Sparkles } from "lucide-react";
 
-import { signIn } from "@/lib/auth-client";
+import { signUp } from "@/lib/auth-client";
 import { getCurrentUser, getEnabledProviders } from "@/lib/server-fns";
 import {
   OAuthProviders,
@@ -10,27 +10,29 @@ import {
   type OAuthProviderId,
 } from "@/components/worklens/OAuthProviders";
 
-export const Route = createFileRoute("/login")({
+export const Route = createFileRoute("/signup")({
   head: () => ({
-    meta: [{ title: "Sign in — WorkLens" }],
+    meta: [{ title: "Create your account — WorkLens" }],
   }),
   beforeLoad: async () => {
     const user = await getCurrentUser();
     if (user) throw redirect({ to: "/app" });
   },
   loader: () => getEnabledProviders(),
-  component: Login,
+  component: Signup,
 });
 
 const inputClass =
   "w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50";
 
-function Login() {
+function Signup() {
   const enabled = Route.useLoaderData();
   const navigate = useNavigate();
 
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [pending, setPending] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -46,12 +48,20 @@ function Login() {
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
-    setPending("email");
 
-    const { error: authError } = await signIn.email({ email: email.trim(), password });
+    if (password !== confirmPassword) {
+      setError("Passwords don't match.");
+      return;
+    }
+
+    setPending("email");
+    const { error: authError } = await signUp.email({
+      name: name.trim(),
+      email: email.trim(),
+      password,
+    });
     if (authError) {
-      // Deliberately generic — don't confirm/deny whether the email is registered.
-      setError(authError.message ?? "Incorrect email or password.");
+      setError(authError.message ?? "Couldn't create your account. Please try again.");
       setPending(null);
       return;
     }
@@ -66,13 +76,25 @@ function Login() {
           <span className="grid size-10 place-items-center rounded-lg bg-primary/15 text-primary">
             <Sparkles className="size-5" />
           </span>
-          <h1 className="mt-4 text-xl font-semibold tracking-tight">Welcome back</h1>
+          <h1 className="mt-4 text-xl font-semibold tracking-tight">
+            Create your Work<span className="text-primary">Lens</span> account
+          </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Sign in to Work<span className="text-primary">Lens</span>
+            Track job readiness, verified skills and your learning roadmap.
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-3">
+          <input
+            type="text"
+            required
+            autoComplete="name"
+            placeholder="Full name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            disabled={pending !== null}
+            className={inputClass}
+          />
           <input
             type="email"
             required
@@ -86,10 +108,22 @@ function Login() {
           <input
             type="password"
             required
-            autoComplete="current-password"
-            placeholder="Password"
+            minLength={8}
+            autoComplete="new-password"
+            placeholder="Password (min. 8 characters)"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            disabled={pending !== null}
+            className={inputClass}
+          />
+          <input
+            type="password"
+            required
+            minLength={8}
+            autoComplete="new-password"
+            placeholder="Confirm password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
             disabled={pending !== null}
             className={inputClass}
           />
@@ -98,7 +132,7 @@ function Login() {
             disabled={pending !== null}
             className="w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {pending === "email" ? "Signing in…" : "Sign in"}
+            {pending === "email" ? "Creating account…" : "Create account"}
           </button>
         </form>
 
@@ -107,18 +141,11 @@ function Login() {
         <OAuthProviders enabled={enabled} pending={pending} onSelect={handleOAuth} />
 
         <p className="mt-6 text-center text-xs text-muted-foreground">
-          Don't have an account?{" "}
-          <Link to="/signup" className="font-medium text-foreground hover:text-primary">
-            Create account
+          Already have an account?{" "}
+          <Link to="/login" className="font-medium text-foreground hover:text-primary">
+            Sign in
           </Link>
         </p>
-
-        <button
-          onClick={() => navigate({ to: "/app" })}
-          className="mt-4 w-full text-center text-xs text-muted-foreground hover:text-foreground"
-        >
-          Continue browsing without an account →
-        </button>
       </div>
     </div>
   );
