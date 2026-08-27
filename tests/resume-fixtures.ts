@@ -4,11 +4,21 @@ import type { ResumeAnalysis } from "../src/lib/resume-ai.server";
 
 /** A minimal but real PDF whose text `pdf-parse` can extract. */
 export function makePdf(text: string): Uint8Array {
+  // Escape PDF string metacharacters and lay the text out as one Tj per line so
+  // realistic résumé content (parentheses, backslashes, newlines) survives.
+  const lines = text.split(/\r?\n/);
+  const streamBody = [
+    "BT /F1 11 Tf 50 760 Td 13 TL",
+    ...lines.map(
+      (ln) => `(${ln.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)")}) Tj T*`,
+    ),
+    "ET",
+  ].join("\n");
   const objs = [
     "1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n",
     "2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n",
     "3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>\nendobj\n",
-    `4 0 obj\n<< /Length ${text.length + 60} >>\nstream\nBT /F1 12 Tf 50 740 Td (${text}) Tj ET\nendstream\nendobj\n`,
+    `4 0 obj\n<< /Length ${streamBody.length} >>\nstream\n${streamBody}\nendstream\nendobj\n`,
     "5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n",
   ];
   let pdf = "%PDF-1.4\n";
@@ -67,12 +77,15 @@ export const FAKE_ANALYSIS: ResumeAnalysis = {
       degree: "B.Tech",
       fieldOfStudy: "Electronics and Communication Engineering",
       graduationYear: 2026,
+      courseworkSignals: ["Digital System Design", "Microcontrollers Lab"],
     },
   ],
   academic: {
     detectedDegree: "B.Tech",
     detectedBranch: "Electronics and Communication Engineering",
     detectedBranchConfidence: 95,
+    detectedBranchUncertain: false,
+    branchEvidence: ["ECE degree", "FPGA + firmware projects", "semiconductor internship"],
     detectedSpecialization: "Embedded Systems",
     detectedSpecializationConfidence: 62,
     detectedCollege: "NIT Warangal",
@@ -83,31 +96,39 @@ export const FAKE_ANALYSIS: ResumeAnalysis = {
   skills: [
     {
       name: "Embedded C",
-      kind: "language",
-      evidenceType: "supported_by_resume",
+      category: "language",
+      evidenceStrength: "project_backed",
       confidence: 88,
       evidence: [{ kind: "project", label: "IoT weather station" }],
     },
     {
       name: "Verilog",
-      kind: "language",
-      evidenceType: "supported_by_resume",
+      category: "language",
+      evidenceStrength: "demonstrated",
       confidence: 84,
       evidence: [{ kind: "project", label: "FPGA traffic controller" }],
     },
     {
       name: "Python",
-      kind: "language",
-      evidenceType: "claimed",
+      category: "language",
+      evidenceStrength: "mentioned",
       confidence: 55,
       evidence: [],
     },
   ],
-  programmingLanguages: ["Embedded C", "Verilog", "Python"],
-  frameworks: [],
-  tools: ["MATLAB", "Git", "Vivado"],
-  databases: [],
-  cloudTechnologies: [],
+  skillCategories: {
+    programmingLanguages: ["Embedded C", "Verilog", "Python"],
+    frameworks: [],
+    libraries: ["NumPy"],
+    databases: [],
+    cloudTechnologies: [],
+    devopsTools: ["Git"],
+    aiMlSkills: [],
+    cybersecuritySkills: [],
+    softwareEngineeringSkills: ["Version control"],
+    tools: ["MATLAB", "Vivado"],
+  },
+  softSkills: ["Teamwork"],
   projects: [
     {
       title: "FPGA-based traffic controller",
@@ -130,7 +151,11 @@ export const FAKE_ANALYSIS: ResumeAnalysis = {
   workExperience: [],
   certifications: [],
   achievements: [],
-  potentialCareers: [
+  strengths: ["Hands-on embedded and RTL project experience"],
+  weaknesses: ["No software-engineering depth beyond scripting"],
+  missingSkills: ["System Verilog verification", "RTOS internals"],
+  careerInterests: ["Embedded systems", "Semiconductor / VLSI"],
+  recommendedJobRoles: [
     {
       title: "Embedded Engineer",
       score: 92,
@@ -143,6 +168,12 @@ export const FAKE_ANALYSIS: ResumeAnalysis = {
       rationale: "Some Python; limited software depth shown.",
     },
   ],
+  jobReadiness: {
+    level: "approaching",
+    rationale:
+      "Strong domain projects plus a relevant internship, short of a full-time-ready portfolio.",
+    evidence: ["FPGA traffic controller project", "Firmware internship at Acme Semiconductors"],
+  },
 };
 
 /** Build an injectable `parse` for `analyzeResumeText` / `runResumeAnalysis`. */

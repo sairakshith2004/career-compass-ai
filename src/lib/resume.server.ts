@@ -24,7 +24,9 @@ import {
   type ProjectEntryT,
   type ExperienceEntryT,
   type CertificationEntryT,
-  type SkillKindT,
+  type SkillCategoryT,
+  type EvidenceStrengthT,
+  type JobReadinessLevelT,
 } from "./resume-ai.server";
 import { validateResumeUpload, ResumeUploadError } from "./resume-upload.server";
 import { matchBranchSlug, matchCareerSlug, matchSkillSlug } from "./resume-matching";
@@ -193,10 +195,12 @@ async function persistAnalysis(
       userId,
       aiBranchSlug: branchSlug,
       aiBranchConfidence: clamp(analysis.academic.detectedBranchConfidence),
+      aiBranchUncertain: analysis.academic.detectedBranchUncertain,
       aiSpecialization: analysis.academic.detectedSpecialization,
       aiSpecializationConfidence: clamp(analysis.academic.detectedSpecializationConfidence),
       aiExperienceLevel: analysis.experienceLevel,
       aiExperienceConfidence: clamp(analysis.experienceLevelConfidence),
+      readinessLevel: analysis.jobReadiness.level,
       extractedName: analysis.candidateName,
       extractedCollege: analysis.academic.detectedCollege,
       extractedDegree: analysis.academic.detectedDegree,
@@ -204,26 +208,29 @@ async function persistAnalysis(
       summary: analysis.summary,
       projectDomains: analysis.projectDomains,
       payload: {
+        branchEvidence: analysis.academic.branchEvidence,
+        detectedBranchRaw: analysis.academic.detectedBranch,
         education: analysis.education,
         projects: analysis.projects,
         internships: analysis.internships,
         workExperience: analysis.workExperience,
         certifications: analysis.certifications,
         achievements: analysis.achievements,
-        buckets: {
-          programmingLanguages: analysis.programmingLanguages,
-          frameworks: analysis.frameworks,
-          tools: analysis.tools,
-          databases: analysis.databases,
-          cloudTechnologies: analysis.cloudTechnologies,
-        },
-      },
+        skillCategories: analysis.skillCategories,
+        softSkills: analysis.softSkills,
+        strengths: analysis.strengths,
+        weaknesses: analysis.weaknesses,
+        missingSkills: analysis.missingSkills,
+        careerInterests: analysis.careerInterests,
+        jobReadiness: analysis.jobReadiness,
+      } satisfies AnalysisPayload,
       model,
       promptVersion,
     })
     .returning();
 
-  // Skills + evidence. A resume-derived skill is at most `supported_by_resume`.
+  // Skills + evidence. A resume-derived skill is at most `supported_by_resume`
+  // on the coarse "verified?" axis; the finer AI tier is kept in evidenceStrength.
   const seen = new Set<string>();
   const skillRows = analysis.skills
     .filter((s) => {
@@ -237,11 +244,9 @@ async function persistAnalysis(
       userId,
       skillId: null as string | null,
       skillNameRaw: s.name.trim().slice(0, 120),
-      kind: s.kind,
-      evidenceType:
-        s.evidenceType === "supported_by_resume"
-          ? ("supported_by_resume" as const)
-          : ("claimed" as const),
+      kind: s.category,
+      evidenceStrength: s.evidenceStrength,
+      evidenceType: coarseEvidence(s.evidenceStrength),
       confidence: clamp(s.confidence),
       evidence: s.evidence.map((e) => ({ kind: e.kind, label: e.label.slice(0, 160) })),
     }));
@@ -269,7 +274,7 @@ async function persistAnalysis(
   }
 
   // Career signals.
-  const careerRows = analysis.potentialCareers.slice(0, 12).map((c) => ({
+  const careerRows = analysis.recommendedJobRoles.slice(0, 12).map((c) => ({
     analysisId: analysisRow!.id,
     userId,
     careerId: null as string | null,
@@ -347,6 +352,14 @@ async function writeKeywordSkillBaseline(userId: string, text: string) {
 const clamp = (n: number | null | undefined) =>
   n == null ? 0 : Math.max(0, Math.min(100, Math.round(n)));
 
+/** Collapse the AI's 5-tier evidence strength onto the DB's "verified?" axis.
+ * Résumé text can never produce `assessed` / `project_verified`. */
+function coarseEvidence(s: EvidenceStrengthT): "claimed" | "supported_by_resume" {
+  return s === "demonstrated" || s === "project_backed" || s === "work_backed"
+    ? "supported_by_resume"
+    : "claimed";
+}
+
 // --- reads (all scoped to userId) --------------------------------------
 
 const EXPERIENCE_LABEL = new Map(EXPERIENCE_LEVELS.map((x) => [x.value, x.label]));
@@ -364,6 +377,26 @@ export type ResumeCard = {
   analysisModel: string | null;
 };
 
+export type ReadinessView = {
+  level: JobReadinessLevelT | null;
+  label: string | null;
+  rationale: string | null;
+  evidence: string[];
+};
+
+export type SkillCategoriesView = {
+  programmingLanguages: string[];
+  frameworks: string[];
+  libraries: string[];
+  databases: string[];
+  cloudTechnologies: string[];
+  devopsTools: string[];
+  aiMlSkills: string[];
+  cybersecuritySkills: string[];
+  softwareEngineeringSkills: string[];
+  tools: string[];
+};
+
 export type ResumeAnalysisView = {
   summary: string | null;
   detected: {
@@ -375,22 +408,32 @@ export type ResumeAnalysisView = {
     branchName: string | null;
     branchLabel: string | null;
     branchConfidence: number | null;
+    branchUncertain: boolean;
+    branchEvidence: string[];
     specialization: string | null;
     specializationConfidence: number | null;
     experienceLevel: "student" | "internship" | "junior" | "mid" | "senior" | null;
     experienceLabel: string | null;
     experienceConfidence: number | null;
   };
+  readiness: ReadinessView;
   projectDomains: string[];
   skills: {
     name: string;
     inCatalog: boolean;
-    kind: SkillKindT;
+    kind: SkillCategoryT;
     evidenceType: "claimed" | "supported_by_resume" | "assessed" | "project_verified";
+    evidenceStrength: EvidenceStrengthT | null;
     confidence: number;
     evidence: { kind: string; label: string }[];
   }[];
-  careerSignals: {
+  skillCategories: SkillCategoriesView;
+  softSkills: string[];
+  strengths: string[];
+  weaknesses: string[];
+  missingSkills: string[];
+  careerInterests: string[];
+  recommendedRoles: {
     title: string;
     slug: string | null;
     score: number;
@@ -402,6 +445,26 @@ export type ResumeAnalysisView = {
   workExperience: ExperienceEntryT[];
   certifications: CertificationEntryT[];
   achievements: string[];
+};
+
+const READINESS_LABEL: Record<JobReadinessLevelT, string> = {
+  early: "Early — building foundations",
+  developing: "Developing — some project work",
+  approaching: "Approaching — strong projects + experience",
+  job_ready: "Job-ready — clear role fit",
+};
+
+const EMPTY_SKILL_CATEGORIES: SkillCategoriesView = {
+  programmingLanguages: [],
+  frameworks: [],
+  libraries: [],
+  databases: [],
+  cloudTechnologies: [],
+  devopsTools: [],
+  aiMlSkills: [],
+  cybersecuritySkills: [],
+  softwareEngineeringSkills: [],
+  tools: [],
 };
 
 export type ResumeView = {
@@ -454,6 +517,7 @@ export async function getResumeView(userId: string): Promise<ResumeView> {
         skillNameRaw: resumeSkills.skillNameRaw,
         kind: resumeSkills.kind,
         evidenceType: resumeSkills.evidenceType,
+        evidenceStrength: resumeSkills.evidenceStrength,
         confidence: resumeSkills.confidence,
         evidence: resumeSkills.evidence,
         catalogName: skills.name,
@@ -475,7 +539,8 @@ export async function getResumeView(userId: string): Promise<ResumeView> {
       .where(eq(resumeCareerSignals.analysisId, analysis.id)),
   ]);
 
-  const payload = analysis.payload as AnalysisPayload;
+  const payload = (analysis.payload ?? {}) as AnalysisPayload;
+  const readinessLevel = analysis.readinessLevel;
 
   return {
     resume: base,
@@ -490,8 +555,10 @@ export async function getResumeView(userId: string): Promise<ResumeView> {
         branchName: analysis.aiBranchSlug ? (BRANCH_NAME.get(analysis.aiBranchSlug) ?? null) : null,
         branchLabel: analysis.aiBranchSlug
           ? (BRANCH_NAME.get(analysis.aiBranchSlug) ?? analysis.aiBranchSlug)
-          : null,
+          : (payload.detectedBranchRaw ?? null),
         branchConfidence: analysis.aiBranchConfidence,
+        branchUncertain: Boolean(analysis.aiBranchUncertain),
+        branchEvidence: payload.branchEvidence ?? [],
         specialization: analysis.aiSpecialization,
         specializationConfidence: analysis.aiSpecializationConfidence,
         experienceLevel: analysis.aiExperienceLevel,
@@ -500,6 +567,12 @@ export async function getResumeView(userId: string): Promise<ResumeView> {
           : null,
         experienceConfidence: analysis.aiExperienceConfidence,
       },
+      readiness: {
+        level: readinessLevel,
+        label: readinessLevel ? READINESS_LABEL[readinessLevel] : null,
+        rationale: payload.jobReadiness?.rationale ?? null,
+        evidence: payload.jobReadiness?.evidence ?? [],
+      },
       projectDomains: analysis.projectDomains ?? [],
       skills: skillRows
         .map((s) => ({
@@ -507,11 +580,18 @@ export async function getResumeView(userId: string): Promise<ResumeView> {
           inCatalog: Boolean(s.catalogSlug),
           kind: s.kind,
           evidenceType: s.evidenceType,
+          evidenceStrength: s.evidenceStrength,
           confidence: s.confidence,
           evidence: s.evidence ?? [],
         }))
         .sort((a, b) => b.confidence - a.confidence),
-      careerSignals: signalRows
+      skillCategories: { ...EMPTY_SKILL_CATEGORIES, ...(payload.skillCategories ?? {}) },
+      softSkills: payload.softSkills ?? [],
+      strengths: payload.strengths ?? [],
+      weaknesses: payload.weaknesses ?? [],
+      missingSkills: payload.missingSkills ?? [],
+      careerInterests: payload.careerInterests ?? [],
+      recommendedRoles: signalRows
         .map((c) => ({
           title: c.catalogTitle ?? c.careerTitleRaw,
           slug: c.catalogSlug,
@@ -531,12 +611,21 @@ export async function getResumeView(userId: string): Promise<ResumeView> {
 }
 
 type AnalysisPayload = {
+  branchEvidence?: string[];
+  detectedBranchRaw?: string | null;
   education?: EducationEntryT[];
   projects?: ProjectEntryT[];
   internships?: ExperienceEntryT[];
   workExperience?: ExperienceEntryT[];
   certifications?: CertificationEntryT[];
   achievements?: string[];
+  skillCategories?: Partial<SkillCategoriesView>;
+  softSkills?: string[];
+  strengths?: string[];
+  weaknesses?: string[];
+  missingSkills?: string[];
+  careerInterests?: string[];
+  jobReadiness?: { level: JobReadinessLevelT; rationale: string; evidence: string[] };
 };
 
 export type Discrepancy = {

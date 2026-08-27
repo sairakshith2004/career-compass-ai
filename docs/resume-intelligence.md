@@ -12,16 +12,16 @@ Upload → validate + malware-scan → store (private) → extract text
 
 `src/lib/resume-upload.server.ts` runs the full gate before any bytes are stored:
 
-| Check | How |
-|---|---|
-| Size | ≤ `RESUME_MAX_BYTES` (default 5 MB), ≥ 64 bytes |
-| Extension | must be `.pdf` / `.docx` |
-| Declared MIME | must be in an allow-list for that extension |
-| **Real file signature** | bytes must start with `%PDF-` (PDF) or `PK\x03\x04` (DOCX zip). A PDF renamed `.docx` is rejected — the client `Content-Type` is never trusted |
-| **Malware scan** | structural heuristics that always run (DOCX: `vbaProject.bin` / macros / embedded `.exe`…; PDF: `/JavaScript` / `/Launch` / `/OpenAction`), **plus** an external scanner when `RESUME_MALWARE_SCAN_CMD` is set (file on stdin, exit 0 = clean — plug in `clamdscan -`). A scanner failing to run is a hard error, not a silent pass |
-| Filename | `sanitizeFilename` — strips path components and control chars, allow-lists characters, caps length, forces the correct extension. **Never used as a filesystem path** |
-| Storage | `saveResumeFile` writes to `<userId>/<uuid>.<ext>` under `RESUME_UPLOAD_DIR` (not under `public/`, no route serves it). `readResumeFile` refuses any key whose first segment ≠ the requesting user and any path escaping the root |
-| Access | every read is owner-scoped (`getResumeFileForUser`, `getResumeView` — `where userId = <session user>`); a user cannot see or download another's résumé (tested) |
+| Check                   | How                                                                                                                                                                                                                                                                                                                                 |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Size                    | ≤ `RESUME_MAX_BYTES` (default 5 MB), ≥ 64 bytes                                                                                                                                                                                                                                                                                     |
+| Extension               | must be `.pdf` / `.docx`                                                                                                                                                                                                                                                                                                            |
+| Declared MIME           | must be in an allow-list for that extension                                                                                                                                                                                                                                                                                         |
+| **Real file signature** | bytes must start with `%PDF-` (PDF) or `PK\x03\x04` (DOCX zip). A PDF renamed `.docx` is rejected — the client `Content-Type` is never trusted                                                                                                                                                                                      |
+| **Malware scan**        | structural heuristics that always run (DOCX: `vbaProject.bin` / macros / embedded `.exe`…; PDF: `/JavaScript` / `/Launch` / `/OpenAction`), **plus** an external scanner when `RESUME_MALWARE_SCAN_CMD` is set (file on stdin, exit 0 = clean — plug in `clamdscan -`). A scanner failing to run is a hard error, not a silent pass |
+| Filename                | `sanitizeFilename` — strips path components and control chars, allow-lists characters, caps length, forces the correct extension. **Never used as a filesystem path**                                                                                                                                                               |
+| Storage                 | `saveResumeFile` writes to `<userId>/<uuid>.<ext>` under `RESUME_UPLOAD_DIR` (not under `public/`, no route serves it). `readResumeFile` refuses any key whose first segment ≠ the requesting user and any path escaping the root                                                                                                   |
+| Access                  | every read is owner-scoped (`getResumeFileForUser`, `getResumeView` — `where userId = <session user>`); a user cannot see or download another's résumé (tested)                                                                                                                                                                     |
 
 ## The AI call — `src/lib/resume-ai.server.ts`
 
@@ -44,15 +44,15 @@ Upload → validate + malware-scan → store (private) → extract text
 - **Error handling** (each → a typed `ResumeAIError` with a user-safe message,
   never a stack trace):
 
-  | Failure | Code |
-  |---|---|
-  | No `ANTHROPIC_API_KEY` / auth error | `not_configured` |
-  | Empty / unreadable text (no model call) | `empty_text` |
-  | `APIConnectionTimeoutError` / abort | `timeout` |
-  | `RateLimitError` | `rate_limited` |
-  | `stop_reason: "refusal"` | `refused` |
-  | `parsed_output` null / Zod mismatch | `malformed` |
-  | any other `APIError` | `provider_error` |
+  | Failure                                 | Code             |
+  | --------------------------------------- | ---------------- |
+  | No `ANTHROPIC_API_KEY` / auth error     | `not_configured` |
+  | Empty / unreadable text (no model call) | `empty_text`     |
+  | `APIConnectionTimeoutError` / abort     | `timeout`        |
+  | `RateLimitError`                        | `rate_limited`   |
+  | `stop_reason: "refusal"`                | `refused`        |
+  | `parsed_output` null / Zod mismatch     | `malformed`      |
+  | any other `APIError`                    | `provider_error` |
 
 - **Privacy.** Logs metadata only — character count, duration, token usage,
   model. Never the résumé text or the analysis content.
@@ -112,7 +112,7 @@ Summary · **Discrepancy panel** (if any) · **Academic profile** (each field wi
 its confidence) · **Detected skills** (grouped by kind, evidence badge + %) ·
 Projects (title / domain / tech) · Experience (internships + work) ·
 Certifications · Achievements · **Career signals** (score bars) with a standing
-disclaimer that these are *recommendations, not classifications* — a low score
+disclaimer that these are _recommendations, not classifications_ — a low score
 means less résumé evidence for that path yet, not that it's closed · Project
 domains.
 
@@ -127,7 +127,7 @@ domains.
   experience, certifications, achievements).
 - `resume_skills` — `skill_id?` (matched catalog skill), `skill_name_raw`,
   `kind`, `evidence_type`, `confidence`, `evidence` JSON. `unique(analysis_id,
-  skill_name_raw)`.
+skill_name_raw)`.
 - `resume_career_signals` — `career_id?` (matched catalog career),
   `career_title_raw`, `score`, `rationale`.
 
@@ -177,3 +177,96 @@ echo 'ANTHROPIC_API_KEY=sk-ant-...' >> .env
 6. `bun run db:studio` → `resume_analyses` / `resume_skills` are keyed by
    `user_id`; the stored file lives under `uploads/resumes/<userId>/…` and no
    route serves it.
+
+---
+
+# Phase 5 — Real AI, richer intelligence
+
+Phase 5 turned on the real Anthropic call and widened what the analysis
+produces. **No rebuild** — the Phase 4 pipeline (upload → validate/scan →
+extract → analyze → persist → view) is unchanged; the AI schema, prompt, three
+DB columns, and the results UI grew.
+
+## Anthropic integration status
+
+- **Where:** `src/lib/resume-ai.server.ts` only. `.server.ts`, key from
+  `process.env["ANTHROPIC_API_KEY"]` (or `ANTHROPIC_AUTH_TOKEN`), never logged,
+  never returned, never stored (only `model` / `promptVersion` / token `usage`
+  are persisted).
+- **Call:** `client.messages.parse({ model, output_config.format:
+zodOutputFormat(ResumeAnalysisSchema) })`, `claude-opus-5` (override
+  `RESUME_AI_MODEL`), 16k `max_tokens`, per-request timeout `RESUME_AI_TIMEOUT_MS`
+  (default 120s), SDK default retries (2) for 429/5xx/network.
+- **Errors** → one typed `ResumeAIError` with a user-safe `userMessage`
+  (`mapAnthropicError`): `not_configured` (missing/invalid key → 401),
+  `empty_text` (no model call), `timeout`, `rate_limited`, `refused`
+  (`stop_reason: "refusal"`), `malformed` (`parsed_output` null **or** the Zod
+  re-check fails), `provider_error` (anything else). The row is left `failed`
+  with the safe message; **Retry** re-runs.
+- **Prompt** (`RESUME_ANALYSIS_PROMPT_VERSION` `2026-08-27.2`): framed as a
+  "career-intelligence engine, not a summarizer". Lists the 20 supported
+  branches. "Do not decide the branch from the degree title alone — weigh
+  education, coursework, projects, internships, skills, certifications; if the
+  evidence is thin or contradictory, set `detectedBranchUncertain` and keep
+  confidence low." Five skill-evidence tiers (`demonstrated` / `project_backed`
+  / `work_backed` / `mentioned` / `inferred`). "Never claim experience the
+  résumé doesn't state." Résumé text stays in the user turn inside
+  `<resume_document>`; the second-line Zod validation is unchanged.
+
+## Structured output — extended schema
+
+`ResumeAnalysisSchema` now also produces: `academic.detectedBranchUncertain`
+
+- `academic.branchEvidence`; per-skill `evidenceStrength` (5 tiers) and a
+  12-value `category`; `skillCategories` (programmingLanguages, frameworks,
+  libraries, databases, cloudTechnologies, devopsTools, aiMlSkills,
+  cybersecuritySkills, softwareEngineeringSkills, tools); `softSkills`;
+  `strengths`; `weaknesses`; `missingSkills`; `careerInterests`;
+  `recommendedJobRoles` (was `potentialCareers`); `jobReadiness` (`level` ∈
+  `early` / `developing` / `approaching` / `job_ready`, `rationale`, `evidence[]`);
+  `education[].courseworkSignals`.
+
+## Database — migration `0005_ancient_puma` (additive, 3 columns)
+
+- `resume_analyses.ai_branch_uncertain` (boolean) — the uncertainty indicator.
+- `resume_analyses.readiness_level` (enum text) — the job-readiness bucket.
+- `resume_skills.evidence_strength` (enum text) — the finer AI tier;
+  `evidence_type` stays the coarse "verified?" axis and résumé skills still
+  never reach `assessed` / `project_verified` (`coarseEvidence()` maps them).
+
+No new tables. `resume_skills.kind` enum widened to the 12 categories (text
+column — no SQL constraint change). Everything else nested (branchEvidence,
+skillCategories, strengths, weaknesses, missingSkills, careerInterests,
+softSkills, jobReadiness rationale/evidence) lives in the validated
+`resume_analyses.payload` JSON.
+
+## Frontend — `src/routes/app.resume.tsx`
+
+New result sections: **Detected engineering branch** (label + confidence, or a
+"Low confidence" badge + "treat as a guess" note when uncertain, + the evidence
+list) · **Job-readiness level** (badge + rationale + evidence, "a snapshot, not
+a score") · **Skill categories** (the 10 buckets) · **Detected skills** grouped
+by the 12 families with the evidence-strength badge · **Strengths / Weaknesses /
+Missing skills** · **Soft skills / Career interests** · **Recommended job roles**
+(unchanged disclaimer). All read straight from `getResumeView`.
+
+## Real end-to-end test
+
+`bun scripts/resume-live-e2e.ts` runs the whole pipeline against the **real**
+Anthropic API (no stub): create user → PDF upload → text extraction → real
+`messages.parse` → Zod validation → DB persistence → `getResumeView` shape →
+cross-user isolation. Prints safe diagnostics only (branch, confidence,
+readiness, counts — never the résumé text, analysis body, or any secret).
+Requires a valid `sk-ant-…` key in `.env`.
+
+## Tests (Phase 5 additions — `tests/resume-phase5.test.ts`, 7 cases)
+
+branch confidence + uncertainty + evidence round-trip; a low-confidence branch
+is stored/shown as uncertain; job-readiness level + evidence persist and
+surface; skill categories / strengths / weaknesses / missing skills / interests
+all surface; `evidenceStrength` per skill with résumé skills off the verified
+axis; `mapAnthropicError` maps timeout / rate-limit / auth / connection /
+generic to typed user-safe errors (and the auth message never echoes provider
+detail); a partial/fabricated object fails the Zod re-check.
+
+Total: **90 tests pass** across phases 1–5.

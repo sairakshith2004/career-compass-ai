@@ -254,13 +254,70 @@ function ProcessingStrip({ phase }: { phase: ProcessingPhase }) {
 
 // --- results ------------------------------------------------------------
 
+const EVIDENCE_STRENGTH_LABEL: Record<string, string> = {
+  demonstrated: "Demonstrated",
+  project_backed: "Project-backed",
+  work_backed: "Work-backed",
+  mentioned: "Mentioned",
+  inferred: "Inferred",
+};
+
+const SKILL_GROUP_LABEL: Record<string, string> = {
+  language: "Programming languages",
+  framework: "Frameworks",
+  library: "Libraries",
+  database: "Databases",
+  cloud: "Cloud",
+  devops: "DevOps",
+  ai_ml: "AI / ML",
+  cybersecurity: "Cybersecurity",
+  software_engineering: "Software engineering",
+  tool: "Tools",
+  concept: "Concepts",
+  other: "Other",
+};
+const SKILL_GROUP_ORDER = [
+  "language",
+  "framework",
+  "library",
+  "database",
+  "cloud",
+  "devops",
+  "ai_ml",
+  "cybersecurity",
+  "software_engineering",
+  "tool",
+  "concept",
+  "other",
+];
+
+const READINESS_TONE = (level: string | null) =>
+  level === "job_ready"
+    ? "success"
+    : level === "approaching"
+      ? "primary"
+      : level === "developing"
+        ? "warning"
+        : "muted";
+
 function Results({ view }: { view: ResumeView }) {
   if (!view.resume || !view.analysis) return null;
   const { analysis, resume, discrepancies } = view;
   const d = analysis.detected;
 
   const skillsByKind = groupBy(analysis.skills, (s) => s.kind);
-  const kindOrder = ["language", "framework", "tool", "database", "cloud", "concept", "other"];
+  const categoryEntries: [string, string[]][] = [
+    ["Programming languages", analysis.skillCategories.programmingLanguages],
+    ["Frameworks", analysis.skillCategories.frameworks],
+    ["Libraries", analysis.skillCategories.libraries],
+    ["Databases", analysis.skillCategories.databases],
+    ["Cloud", analysis.skillCategories.cloudTechnologies],
+    ["DevOps", analysis.skillCategories.devopsTools],
+    ["AI / ML", analysis.skillCategories.aiMlSkills],
+    ["Cybersecurity", analysis.skillCategories.cybersecuritySkills],
+    ["Software engineering", analysis.skillCategories.softwareEngineeringSkills],
+    ["Tools", analysis.skillCategories.tools],
+  ];
 
   return (
     <div className="space-y-4">
@@ -313,6 +370,82 @@ function Results({ view }: { view: ResumeView }) {
         </div>
       )}
 
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Panel title="Detected engineering branch">
+          {d.branchLabel ? (
+            <>
+              <p className="text-lg font-semibold tracking-tight">{d.branchLabel}</p>
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+                {d.branchUncertain ? (
+                  <Badge tone="warning">
+                    <AlertTriangle className="mr-1 inline size-3" /> Low confidence
+                  </Badge>
+                ) : (
+                  <Badge tone={CONFIDENCE_TONE(d.branchConfidence)}>
+                    {d.branchConfidence ?? 0}% confidence
+                  </Badge>
+                )}
+                {d.specialization && (
+                  <span className="text-muted-foreground">
+                    Specialization: <span className="text-foreground">{d.specialization}</span>
+                  </span>
+                )}
+              </div>
+              {d.branchUncertain && (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  The résumé evidence for a branch is thin or mixed — treat this as a guess, not a
+                  label.
+                </p>
+              )}
+              {d.branchEvidence.length > 0 && (
+                <div className="mt-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Evidence used
+                  </p>
+                  <ul className="mt-1 list-disc space-y-0.5 pl-4 text-xs text-muted-foreground">
+                    {d.branchEvidence.map((e, i) => (
+                      <li key={i}>{e}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">Not detected from this résumé.</p>
+          )}
+        </Panel>
+
+        <Panel title="Job-readiness level">
+          {analysis.readiness.level ? (
+            <>
+              <Badge tone={READINESS_TONE(analysis.readiness.level)}>
+                {analysis.readiness.label}
+              </Badge>
+              {analysis.readiness.rationale && (
+                <p className="mt-2 text-sm text-muted-foreground">{analysis.readiness.rationale}</p>
+              )}
+              {analysis.readiness.evidence.length > 0 && (
+                <div className="mt-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Evidence
+                  </p>
+                  <ul className="mt-1 list-disc space-y-0.5 pl-4 text-xs text-muted-foreground">
+                    {analysis.readiness.evidence.map((e, i) => (
+                      <li key={i}>{e}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              <p className="mt-3 text-xs text-muted-foreground">
+                An estimate from résumé evidence — a snapshot, not a score.
+              </p>
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">Not assessed.</p>
+          )}
+        </Panel>
+      </div>
+
       <Panel
         title="Academic profile"
         description="AI-detected from your résumé — not applied to your profile."
@@ -323,26 +456,59 @@ function Results({ view }: { view: ResumeView }) {
           <Detected label="College / university" value={d.college} />
           <Detected label="Graduation year" value={d.graduationYear} />
           <Detected
-            label="Engineering branch"
-            value={d.branchLabel}
-            confidence={d.branchConfidence}
-          />
-          <Detected
-            label="Specialization"
-            value={d.specialization}
-            confidence={d.specializationConfidence}
-          />
-          <Detected
             label="Experience level"
             value={d.experienceLabel}
             confidence={d.experienceConfidence}
           />
         </dl>
+        {analysis.education.length > 0 && (
+          <ul className="mt-4 space-y-2 border-t border-border pt-3 text-sm">
+            {analysis.education.map((e, i) => (
+              <li key={i}>
+                <span className="font-medium">
+                  {[e.degree, e.fieldOfStudy].filter(Boolean).join(", ") || "Education"}
+                </span>
+                {e.institution && <span className="text-muted-foreground"> · {e.institution}</span>}
+                {e.graduationYear && (
+                  <span className="text-muted-foreground"> · {e.graduationYear}</span>
+                )}
+                {e.courseworkSignals.length > 0 && (
+                  <span className="block text-xs text-muted-foreground">
+                    Coursework: {e.courseworkSignals.join(", ")}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
       </Panel>
+
+      {categoryEntries.some(([, v]) => v.length > 0) && (
+        <Panel title="Skill categories">
+          <div className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
+            {categoryEntries
+              .filter(([, v]) => v.length > 0)
+              .map(([label, items]) => (
+                <div key={label}>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    {label}
+                  </p>
+                  <div className="mt-1 flex flex-wrap gap-1.5">
+                    {items.map((it) => (
+                      <span key={it} className="rounded-full bg-muted px-2 py-0.5 text-xs">
+                        {it}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+          </div>
+        </Panel>
+      )}
 
       <Panel
         title="Detected skills"
-        description="Evidence level shown per skill. A résumé mention alone is never “verified”."
+        description="Grouped by family, with the strength of résumé evidence behind each. A mention alone is never “verified”."
       >
         {analysis.skills.length === 0 ? (
           <EmptyState
@@ -351,45 +517,81 @@ function Results({ view }: { view: ResumeView }) {
           />
         ) : (
           <div className="space-y-4">
-            {kindOrder
-              .filter((k) => skillsByKind.get(k)?.length)
-              .map((k) => (
-                <div key={k}>
-                  <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    {k === "concept" ? "Concepts" : `${k}s`}
-                  </p>
-                  <div className="space-y-1.5">
-                    {skillsByKind.get(k)!.map((s) => (
-                      <div
-                        key={s.name}
-                        className="flex flex-wrap items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm"
-                      >
-                        <span className="font-medium">{s.name}</span>
-                        {!s.inCatalog && (
-                          <span className="text-xs text-muted-foreground">(not in catalog)</span>
+            {SKILL_GROUP_ORDER.filter((k) => skillsByKind.get(k)?.length).map((k) => (
+              <div key={k}>
+                <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  {SKILL_GROUP_LABEL[k] ?? k}
+                </p>
+                <div className="space-y-1.5">
+                  {skillsByKind.get(k)!.map((s) => (
+                    <div
+                      key={s.name}
+                      className="flex flex-wrap items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm"
+                    >
+                      <span className="font-medium">{s.name}</span>
+                      {!s.inCatalog && (
+                        <span className="text-xs text-muted-foreground">(not in catalog)</span>
+                      )}
+                      <Badge tone={s.evidenceType === "supported_by_resume" ? "success" : "muted"}>
+                        {s.evidenceType === "supported_by_resume" && (
+                          <BadgeCheck className="mr-1 inline size-3" />
                         )}
-                        <Badge
-                          tone={s.evidenceType === "supported_by_resume" ? "success" : "muted"}
-                        >
-                          {s.evidenceType === "supported_by_resume" ? (
-                            <BadgeCheck className="mr-1 inline size-3" />
-                          ) : null}
-                          {EVIDENCE_LABEL[s.evidenceType] ?? s.evidenceType}
-                        </Badge>
-                        <span className="text-xs text-muted-foreground">{s.confidence}%</span>
-                        {s.evidence.length > 0 && (
-                          <span className="w-full text-xs text-muted-foreground">
-                            {s.evidence.map((e) => e.label).join(" · ")}
-                          </span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
+                        {s.evidenceStrength
+                          ? (EVIDENCE_STRENGTH_LABEL[s.evidenceStrength] ?? s.evidenceStrength)
+                          : (EVIDENCE_LABEL[s.evidenceType] ?? s.evidenceType)}
+                      </Badge>
+                      <span className="text-xs text-muted-foreground">{s.confidence}%</span>
+                      {s.evidence.length > 0 && (
+                        <span className="w-full text-xs text-muted-foreground">
+                          {s.evidence.map((e) => e.label).join(" · ")}
+                        </span>
+                      )}
+                    </div>
+                  ))}
                 </div>
-              ))}
+              </div>
+            ))}
           </div>
         )}
       </Panel>
+
+      <div className="grid gap-4 lg:grid-cols-3">
+        <StringListPanel title="Strengths" tone="text-success" items={analysis.strengths} />
+        <StringListPanel title="Weaknesses" tone="text-warning" items={analysis.weaknesses} />
+        <StringListPanel
+          title="Missing skills"
+          tone="text-muted-foreground"
+          items={analysis.missingSkills}
+          hint="Skills a recruiter for your target roles would expect."
+        />
+      </div>
+
+      {(analysis.softSkills.length > 0 || analysis.careerInterests.length > 0) && (
+        <div className="grid gap-4 sm:grid-cols-2">
+          {analysis.softSkills.length > 0 && (
+            <Panel title="Soft skills">
+              <div className="flex flex-wrap gap-1.5">
+                {analysis.softSkills.map((s) => (
+                  <Badge key={s} tone="muted">
+                    {s}
+                  </Badge>
+                ))}
+              </div>
+            </Panel>
+          )}
+          {analysis.careerInterests.length > 0 && (
+            <Panel title="Career interests">
+              <div className="flex flex-wrap gap-1.5">
+                {analysis.careerInterests.map((s) => (
+                  <Badge key={s} tone="primary">
+                    {s}
+                  </Badge>
+                ))}
+              </div>
+            </Panel>
+          )}
+        </div>
+      )}
 
       {analysis.projects.length > 0 && (
         <Panel title="Projects">
@@ -473,7 +675,7 @@ function Results({ view }: { view: ResumeView }) {
       )}
 
       <Panel
-        title="Career signals"
+        title="Recommended job roles"
         description="Suggestions from your résumé — not a verdict on what you can do."
       >
         <div className="mb-3 flex items-start gap-2 rounded-lg bg-muted/60 p-3 text-xs text-muted-foreground">
@@ -482,14 +684,14 @@ function Results({ view }: { view: ResumeView }) {
           classifications. A low score means your résumé shows less evidence for that path yet — not
           that it's closed to you.
         </div>
-        {analysis.careerSignals.length === 0 ? (
+        {analysis.recommendedRoles.length === 0 ? (
           <EmptyState
-            title="No clear career signals"
+            title="No clear role signals"
             description="Add projects and internships for sharper suggestions."
           />
         ) : (
           <ul className="space-y-2">
-            {analysis.careerSignals.map((c) => (
+            {analysis.recommendedRoles.map((c) => (
               <li key={c.title} className="rounded-lg border border-border p-3">
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-sm font-medium">{c.title}</span>
@@ -525,6 +727,36 @@ function Results({ view }: { view: ResumeView }) {
         </Panel>
       )}
     </div>
+  );
+}
+
+function StringListPanel({
+  title,
+  tone,
+  items,
+  hint,
+}: {
+  title: string;
+  tone: string;
+  items: string[];
+  hint?: string;
+}) {
+  return (
+    <Panel title={title}>
+      {hint && <p className="mb-2 text-xs text-muted-foreground">{hint}</p>}
+      {items.length === 0 ? (
+        <p className="text-sm text-muted-foreground">None identified.</p>
+      ) : (
+        <ul className="space-y-1.5 text-sm">
+          {items.map((it, i) => (
+            <li key={i} className="flex gap-2">
+              <span className={cn("mt-1 size-1.5 shrink-0 rounded-full bg-current", tone)} />
+              <span>{it}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Panel>
   );
 }
 

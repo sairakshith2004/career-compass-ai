@@ -34,7 +34,8 @@ export const uploadResume = createServerFn({ method: "POST" })
       return await ingestResumeUpload(id, data.file);
     } catch (err) {
       if (err instanceof ResumeUploadError) throw new Error(err.message);
-      throw err;
+      console.error("[resume-fns] upload failed:", err instanceof Error ? err.message : err);
+      throw new Error("Couldn't process that file. Please try again.");
     }
   });
 
@@ -46,9 +47,13 @@ export const analyzeResume = createServerFn({ method: "POST" })
     try {
       return await runResumeAnalysis(id, data.resumeId);
     } catch (err) {
-      // Surface a user-safe message; the row is already marked `failed`.
+      // Surface a user-safe message only; the row is already marked `failed`.
       if (err instanceof ResumeAIError) throw new Error(err.userMessage);
-      throw err;
+      if (err instanceof Error && err.message === "Resume not found") {
+        throw new Error("We couldn't find that résumé.");
+      }
+      console.error("[resume-fns] analyze failed:", err instanceof Error ? err.message : err);
+      throw new Error("The analysis failed. Please try again.");
     }
   });
 

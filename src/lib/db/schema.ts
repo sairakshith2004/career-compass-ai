@@ -301,6 +301,13 @@ export const resumeAnalyses = sqliteTable(
       enum: ["student", "internship", "junior", "mid", "senior"],
     }),
     aiExperienceConfidence: integer("ai_experience_confidence"),
+    // Uncertainty indicator — set when the résumé evidence for the branch is
+    // weak or conflicting. The UI shows this instead of a confident-looking guess.
+    aiBranchUncertain: integer("ai_branch_uncertain", { mode: "boolean" }),
+    // Overall job-readiness bucket derived from the résumé's evidence.
+    readinessLevel: text("readiness_level", {
+      enum: ["early", "developing", "approaching", "job_ready"],
+    }),
     // Extracted, as text (the AI's reading of the resume — not authoritative).
     extractedName: text("extracted_name"),
     extractedCollege: text("extracted_college"),
@@ -334,8 +341,23 @@ export const resumeSkills = sqliteTable(
     // Matched catalog skill, or null when the AI named a skill we don't catalog.
     skillId: text("skill_id").references(() => skills.id, { onDelete: "set null" }),
     skillNameRaw: text("skill_name_raw").notNull(),
+    // AI skill family. Widened in Phase 5 to the full set of categories the
+    // résumé-intelligence view groups by.
     kind: text("kind", {
-      enum: ["language", "framework", "tool", "database", "cloud", "concept", "other"],
+      enum: [
+        "language",
+        "framework",
+        "library",
+        "database",
+        "cloud",
+        "devops",
+        "ai_ml",
+        "cybersecurity",
+        "software_engineering",
+        "tool",
+        "concept",
+        "other",
+      ],
     })
       .notNull()
       .default("other"),
@@ -344,6 +366,12 @@ export const resumeSkills = sqliteTable(
     })
       .notNull()
       .default("claimed"),
+    // Finer AI signal behind `evidenceType`: demonstrated | project_backed |
+    // work_backed | mentioned | inferred. `evidenceType` stays the coarse
+    // "is this verified?" axis (résumé text is never `assessed`/`project_verified`).
+    evidenceStrength: text("evidence_strength", {
+      enum: ["demonstrated", "project_backed", "work_backed", "mentioned", "inferred"],
+    }),
     confidence: integer("confidence").notNull().default(0), // 0–100
     // [{ kind: "project"|"internship"|"experience"|"certification"|"education", label: string }]
     evidence: text("evidence", { mode: "json" }).$type<{ kind: string; label: string }[]>(),
