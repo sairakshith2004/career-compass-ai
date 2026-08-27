@@ -32,7 +32,7 @@ describe("catalog", () => {
   test("branch and career are independent — every career is offered regardless of branch", () => {
     const cat = profile.onboardingCatalog();
     // An ECE branch exists...
-    expect(cat.branches.some((b) => b.slug === "ece")).toBe(true);
+    expect(cat.branches.some((b) => b.slug === "electronics-communication")).toBe(true);
     // ...and software / AI / data careers are in the same flat list, not gated by branch.
     for (const slug of [
       "ml-engineer",
@@ -63,13 +63,13 @@ describe("progress persists and resumes", () => {
       collegeName: "NIT Trichy",
       countryCode: "IN",
     });
-    await profile.saveBranch(alice, { branchSlug: "ece" });
+    await profile.saveBranch(alice, { branchSlug: "electronics-communication" });
     await profile.saveGraduation(alice, { currentYear: "third", graduationYear: 2027 });
 
     const state = await profile.getOnboardingState(alice);
     expect(state.fullName).toBe("Alice Kumar");
     expect(state.degree).toBe("B.Tech");
-    expect(state.branchSlug).toBe("ece");
+    expect(state.branchSlug).toBe("electronics-communication");
     expect(state.collegeName).toBe("NIT Trichy");
     expect(state.countryCode).toBe("IN");
     expect(state.currentYear).toBe("third");
@@ -88,7 +88,7 @@ describe("progress persists and resumes", () => {
     const state = await profile.getOnboardingState(alice);
     expect(state.collegeName).toBe("IIT Madras");
     // branch (step 2) and graduation (step 3) survive.
-    expect(state.branchSlug).toBe("ece");
+    expect(state.branchSlug).toBe("electronics-communication");
     expect(state.graduationYear).toBe(2027);
     expect(state.lastCompletedStep).toBe(3);
   });
@@ -100,7 +100,7 @@ describe("progress persists and resumes", () => {
       targetCareerSlugs: ["ml-engineer", "backend-developer"],
     });
     const state = await profile.getOnboardingState(alice);
-    expect(state.branchSlug).toBe("ece");
+    expect(state.branchSlug).toBe("electronics-communication");
     expect(state.careerGoalStatus).toBe("exploring");
     expect([...state.targetCareerSlugs].sort()).toEqual(["backend-developer", "ml-engineer"]);
   });
@@ -140,15 +140,15 @@ describe("progress persists and resumes", () => {
 describe("ownership — a profile belongs only to its user", () => {
   test("getOnboardingState only ever returns the requested user's data", async () => {
     await profile.saveAcademicBackground(bob, { fullName: "Bob Rao", collegeName: "BITS Pilani" });
-    await profile.saveBranch(bob, { branchSlug: "mech" });
+    await profile.saveBranch(bob, { branchSlug: "mechanical" });
 
     const aliceState = await profile.getOnboardingState(alice);
     const bobState = await profile.getOnboardingState(bob);
 
     expect(aliceState.collegeName).toBe("IIT Madras");
     expect(bobState.collegeName).toBe("BITS Pilani");
-    expect(aliceState.branchSlug).toBe("ece");
-    expect(bobState.branchSlug).toBe("mech");
+    expect(aliceState.branchSlug).toBe("electronics-communication");
+    expect(bobState.branchSlug).toBe("mechanical");
   });
 
   test("getStudentProfileSummary is scoped to the user id it is given", async () => {

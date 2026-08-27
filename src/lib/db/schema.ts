@@ -17,28 +17,131 @@ const timestamps = {
     .default(sql`(unixepoch())`),
 };
 
-// --- Student onboarding / profile (Phase 2) -------------------------------
+// --- Engineering + career taxonomy (Phase 2 + Phase 3) --------------------
 //
-// `engineering_branches` and `careers` are reference tables — a student profile
-// points at them by id so we can later query "students in branch X" or
-// "students targeting career Y". Branch and career are deliberately unrelated:
-// the career picker offers every career regardless of the student's branch.
-// Seeded from src/lib/onboarding-catalog.ts (db/seed.ts).
+// Reference tables, seeded from src/lib/taxonomy-catalog.ts (db/seed.ts).
+// The model is deliberately open: adding a category / branch / career / link is
+// a data edit, never an application-logic change.
+//
+//   engineering_categories  1─┐
+//                             └─N  engineering_branches ──┐
+//                                                         │ (M:N, by relevance)
+//   careers ──┬──────────────────── branch_career_paths ──┘
+//             │ (M:N, by importance)
+//             └── career_skill_requirements ── skills
+//
+// Branch and career are independent: `branch_career_paths` expresses which
+// careers are *reachable* from a branch, and the same career is reachable from
+// many branches (e.g. Software Engineer from ECE, Mechanical and CSE alike).
 
-export const engineeringBranches = sqliteTable("engineering_branches", {
+export const engineeringCategories = sqliteTable("engineering_categories", {
   id: id(),
   slug: text("slug").notNull().unique(),
   name: text("name").notNull(),
+  description: text("description"),
+  sortOrder: integer("sort_order").notNull().default(0),
   ...timestamps,
 });
+
+export const engineeringBranches = sqliteTable(
+  "engineering_branches",
+  {
+    id: id(),
+    slug: text("slug").notNull().unique(),
+    name: text("name").notNull(),
+    categoryId: text("category_id").references(() => engineeringCategories.id, {
+      onDelete: "set null",
+    }),
+    aliases: text("aliases", { mode: "json" }).$type<string[]>(),
+    description: text("description"),
+    ...timestamps,
+  },
+  (table) => [index("engineering_branches_category_idx").on(table.categoryId)],
+);
 
 export const careers = sqliteTable("careers", {
   id: id(),
   slug: text("slug").notNull().unique(),
   name: text("name").notNull(),
+  // Display grouping (e.g. "Software", "Data & AI") — not a DB relationship.
   category: text("category").notNull(),
+  description: text("description"),
   ...timestamps,
 });
+
+// Which careers are reachable from which branches, and how strongly. This is
+// the "careers compatible with a branch" relationship — many-to-many.
+export const branchCareerPaths = sqliteTable(
+  "branch_career_paths",
+  {
+    id: id(),
+    branchId: text("branch_id")
+      .notNull()
+      .references(() => engineeringBranches.id, { onDelete: "cascade" }),
+    careerId: text("career_id")
+      .notNull()
+      .references(() => careers.id, { onDelete: "cascade" }),
+    relevance: text("relevance", { enum: ["primary", "common", "possible"] }).notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    unique("branch_career_paths_branch_career_unique").on(table.branchId, table.careerId),
+    index("branch_career_paths_branch_idx").on(table.branchId),
+    index("branch_career_paths_career_idx").on(table.careerId),
+  ],
+);
+
+// The skills a career requires, and how central each one is.
+export const careerSkillRequirements = sqliteTable(
+  "career_skill_requirements",
+  {
+    id: id(),
+    careerId: text("career_id")
+      .notNull()
+      .references(() => careers.id, { onDelete: "cascade" }),
+    skillId: text("skill_id")
+      .notNull()
+      .references(() => skills.id, { onDelete: "cascade" }),
+    importance: text("importance", { enum: ["core", "important", "helpful"] }).notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    unique("career_skill_requirements_career_skill_unique").on(table.careerId, table.skillId),
+    index("career_skill_requirements_career_idx").on(table.careerId),
+    index("career_skill_requirements_skill_idx").on(table.skillId),
+  ],
+);
+
+export const engineeringCategoryRelations = relations(engineeringCategories, ({ many }) => ({
+  branches: many(engineeringBranches),
+}));
+
+export const engineeringBranchRelations = relations(engineeringBranches, ({ one, many }) => ({
+  category: one(engineeringCategories, {
+    fields: [engineeringBranches.categoryId],
+    references: [engineeringCategories.id],
+  }),
+  careerPaths: many(branchCareerPaths),
+}));
+
+export const careerRelations = relations(careers, ({ many }) => ({
+  branchPaths: many(branchCareerPaths),
+  skillRequirements: many(careerSkillRequirements),
+}));
+
+export const branchCareerPathRelations = relations(branchCareerPaths, ({ one }) => ({
+  branch: one(engineeringBranches, {
+    fields: [branchCareerPaths.branchId],
+    references: [engineeringBranches.id],
+  }),
+  career: one(careers, {
+    fields: [branchCareerPaths.careerId],
+    references: [careers.id],
+  }),
+}));
+
+// `careerSkillRequirementRelations` is defined after the `skills` table below,
+// since it references it eagerly.
 
 // One row per user. Created on the first onboarding step save and filled in
 // progressively — every field except the goal status is nullable so a student
@@ -159,6 +262,18 @@ export const skills = sqliteTable("skills", {
   parentSkillId: text("parent_skill_id"),
   ...timestamps,
 });
+
+// Taxonomy relation that references `skills` eagerly — must come after it.
+export const careerSkillRequirementRelations = relations(careerSkillRequirements, ({ one }) => ({
+  career: one(careers, {
+    fields: [careerSkillRequirements.careerId],
+    references: [careers.id],
+  }),
+  skill: one(skills, {
+    fields: [careerSkillRequirements.skillId],
+    references: [skills.id],
+  }),
+}));
 
 export const userSkills = sqliteTable("user_skills", {
   id: id(),

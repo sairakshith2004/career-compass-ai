@@ -18,6 +18,11 @@ import {
   isCareerSlug,
   isCountryCode,
 } from "./onboarding-catalog";
+import {
+  ENGINEERING_CATEGORIES,
+  ENGINEERING_BRANCHES as TAXONOMY_BRANCHES,
+  resolveBranchSlug,
+} from "./taxonomy-catalog";
 
 /**
  * Server-only student-profile logic. Every function takes an explicit `userId`
@@ -103,6 +108,8 @@ type Option = { value: string; label: string };
 export type OnboardingCatalog = {
   degrees: string[];
   branches: { slug: string; name: string }[];
+  /** Branches grouped by engineering category — for the step-2 grouped picker. */
+  branchGroups: { category: string; branches: { slug: string; name: string }[] }[];
   careers: { slug: string; name: string; category: string }[];
   countries: { slug: string; name: string }[];
   currentYears: Option[];
@@ -113,9 +120,18 @@ export type OnboardingCatalog = {
 
 /** Static option lists the wizard renders (no secrets, safe for the client). */
 export function onboardingCatalog(): OnboardingCatalog {
+  const branchGroups = ENGINEERING_CATEGORIES.map((c) => ({
+    category: c.name,
+    branches: TAXONOMY_BRANCHES.filter((b) => b.categorySlug === c.slug).map((b) => ({
+      slug: b.slug,
+      name: b.name,
+    })),
+  })).filter((g) => g.branches.length > 0);
+
   return {
     degrees: [...DEGREES],
     branches: ENGINEERING_BRANCHES.map((b) => ({ slug: b.slug, name: b.name })),
+    branchGroups,
     careers: CAREERS.map((c) => ({ slug: c.slug, name: c.name, category: c.category })),
     countries: COUNTRIES.map((c) => ({ slug: c.slug, name: c.name })),
     currentYears: CURRENT_YEARS.map((y) => ({ value: y.value, label: y.label })),
@@ -164,8 +180,10 @@ export async function saveAcademicBackground(userId: string, raw: AcademicBackgr
 export async function saveBranch(userId: string, raw: BranchInput) {
   const data = branchSchema.parse(raw);
   const { idBySlug } = await branchMaps();
+  // Accept either the canonical slug or a Phase 2 alias ("ece", "mech", …).
+  const canonical = data.branchSlug ? resolveBranchSlug(data.branchSlug) : null;
   await upsertProfile(userId, 2, {
-    branchId: data.branchSlug ? (idBySlug.get(data.branchSlug) ?? null) : null,
+    branchId: canonical ? (idBySlug.get(canonical) ?? null) : null,
   });
   return { ok: true as const };
 }

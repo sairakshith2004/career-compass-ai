@@ -17,13 +17,13 @@ picked "I'm not sure yet" is never trapped in a loop.
 
 ## The 5 steps
 
-| Step | Screen | Collects | Required? |
-|---|---|---|---|
-| 1 | Academic background | Full name, engineering degree, college/university, country | only full name |
-| 2 | Engineering branch | branch | optional (Skip) |
-| 3 | Current year & graduation | current year, expected graduation year | optional (Skip) |
-| 4 | Career direction | career-goal status, target career(s), experience level | goal status |
-| 5 | Review | read-only summary → **Complete** | — |
+| Step | Screen                    | Collects                                                   | Required?       |
+| ---- | ------------------------- | ---------------------------------------------------------- | --------------- |
+| 1    | Academic background       | Full name, engineering degree, college/university, country | only full name  |
+| 2    | Engineering branch        | branch                                                     | optional (Skip) |
+| 3    | Current year & graduation | current year, expected graduation year                     | optional (Skip) |
+| 4    | Career direction          | career-goal status, target career(s), experience level     | goal status     |
+| 5    | Review                    | read-only summary → **Complete**                           | —               |
 
 Every step has **Back**, **Next**, **Skip** (optional steps), and **Save &
 finish later**. Each of those persists the current step server-side before
@@ -53,21 +53,23 @@ Engineer.
 
 Career-goal status drives the picker:
 
-| Status | Picker |
-|---|---|
-| `known` — "I know exactly what I want" | single select (server trims to 1) |
-| `exploring` — "I have a few career options" | multi-select, up to 5 |
-| `unsure` — "I am not sure yet" | hidden; any existing targets are cleared |
+| Status                                      | Picker                                   |
+| ------------------------------------------- | ---------------------------------------- |
+| `known` — "I know exactly what I want"      | single select (server trims to 1)        |
+| `exploring` — "I have a few career options" | multi-select, up to 5                    |
+| `unsure` — "I am not sure yet"              | hidden; any existing targets are cleared |
 
 ## Database
 
 Migration **`0002_certain_stature`**:
 
 ### `engineering_branches` / `careers` — reference tables
+
 `id`, `slug` (unique), `name`, (`category` on careers), timestamps. Seeded lazily
 from `src/lib/onboarding-catalog.ts` (`ensureOnboardingCatalogSeeded`).
 
 ### `student_profiles` — 1:1 with `user`
+
 `user_id` PK/FK (`on delete cascade`). Every answer column is **nullable** so
 optional questions can be skipped:
 
@@ -82,6 +84,7 @@ timestamps.
 Indexes: `student_profiles_branch_idx`, `student_profiles_country_idx`.
 
 ### `student_target_careers` — M:N student ↔ career
+
 `id`, `user_id` (FK cascade), `career_id` (FK → `careers`, cascade), timestamps.
 `unique(user_id, career_id)`, index on `user_id`. One row for `known`, several
 for `exploring`, none for `unsure`. Replace-all on each step-4 save.
@@ -153,4 +156,7 @@ bun install && bun run db:migrate && bun dev   # http://localhost:3000
 10. **Ownership:** sign up a second account, complete a different profile, then
     switch back to the first — each dashboard shows only its own profile.
     `bun run db:studio` → `student_profiles` has one row per `user_id`.
+
+```
+
 ```

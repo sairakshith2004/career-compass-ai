@@ -1,157 +1,23 @@
 /**
- * Static reference data for the student onboarding flow.
+ * Small closed option sets for the onboarding wizard (degree, current year,
+ * experience level, career-goal status, country). These stay as string
+ * enums / codes on the profile row — normalized enough to filter on, not worth
+ * a join table.
  *
- * `ENGINEERING_BRANCHES` and `CAREERS` seed the `engineering_branches` /
- * `careers` tables (see db/seed.ts) — they're normalized into their own tables
- * because a student profile references them by id and we'll want to query
- * "students by branch" / "students targeting career X" later.
- *
- * The small closed sets (degree, current year, experience, goal status,
- * country) stay as string enums / codes on the profile row — normalized enough
- * to filter on, not worth a join table.
- *
- * IMPORTANT: branch and career are independent. The career picker shows every
- * career regardless of branch — an ECE student can target Software or AI/ML, a
- * Mechanical student can target Data. Nothing here maps one to the other.
+ * The engineering-branch and career lists live in the taxonomy
+ * (`taxonomy-catalog.ts` → `engineering_*` / `careers` tables). This module
+ * re-exports the flat {slug,name} views + slug guards the Phase 2 onboarding
+ * code already depends on, so branch/career data has one source of truth.
  */
 
 export type CatalogEntry = { slug: string; name: string };
-export type CareerEntry = CatalogEntry & { category: string };
 
-export const ENGINEERING_BRANCHES: CatalogEntry[] = [
-  { slug: "cse", name: "Computer Science & Engineering" },
-  { slug: "it", name: "Information Technology" },
-  { slug: "ece", name: "Electronics & Communication Engineering" },
-  { slug: "eee", name: "Electrical & Electronics Engineering" },
-  { slug: "eu", name: "Electrical Engineering" },
-  { slug: "mech", name: "Mechanical Engineering" },
-  { slug: "civil", name: "Civil Engineering" },
-  { slug: "chem", name: "Chemical Engineering" },
-  { slug: "aero", name: "Aerospace / Aeronautical Engineering" },
-  { slug: "biotech", name: "Biotechnology Engineering" },
-  { slug: "biomed", name: "Biomedical Engineering" },
-  { slug: "meta", name: "Metallurgical & Materials Engineering" },
-  { slug: "prod", name: "Industrial / Production Engineering" },
-  { slug: "ei", name: "Electronics & Instrumentation Engineering" },
-  { slug: "mechatronics", name: "Mechatronics Engineering" },
-  { slug: "auto", name: "Automobile Engineering" },
-  { slug: "mining", name: "Mining Engineering" },
-  { slug: "marine", name: "Marine Engineering" },
-  { slug: "agri", name: "Agricultural Engineering" },
-  { slug: "petro", name: "Petroleum Engineering" },
-  { slug: "other", name: "Other" },
-];
-
-export const CAREERS: CareerEntry[] = [
-  // Software
-  { slug: "backend-developer", name: "Backend Developer", category: "Software" },
-  { slug: "frontend-developer", name: "Frontend Developer", category: "Software" },
-  { slug: "fullstack-developer", name: "Full-Stack Developer", category: "Software" },
-  { slug: "mobile-developer", name: "Mobile App Developer", category: "Software" },
-  { slug: "devops-engineer", name: "DevOps Engineer", category: "Software" },
-  { slug: "sre", name: "Site Reliability Engineer", category: "Software" },
-  { slug: "cloud-engineer", name: "Cloud Engineer", category: "Software" },
-  { slug: "security-engineer", name: "Security Engineer", category: "Software" },
-  { slug: "qa-engineer", name: "QA / Test Automation Engineer", category: "Software" },
-  { slug: "game-developer", name: "Game Developer", category: "Software" },
-
-  // Data & AI
-  { slug: "data-scientist", name: "Data Scientist", category: "Data & AI" },
-  { slug: "data-analyst", name: "Data Analyst", category: "Data & AI" },
-  { slug: "data-engineer", name: "Data Engineer", category: "Data & AI" },
-  { slug: "ml-engineer", name: "Machine Learning Engineer", category: "Data & AI" },
-  { slug: "ai-researcher", name: "AI Researcher", category: "Data & AI" },
-  { slug: "mlops-engineer", name: "MLOps Engineer", category: "Data & AI" },
-
-  // Hardware & Electronics
-  {
-    slug: "embedded-engineer",
-    name: "Embedded Systems Engineer",
-    category: "Hardware & Electronics",
-  },
-  { slug: "vlsi-engineer", name: "VLSI Design Engineer", category: "Hardware & Electronics" },
-  { slug: "fpga-engineer", name: "FPGA Engineer", category: "Hardware & Electronics" },
-  {
-    slug: "hardware-design-engineer",
-    name: "Hardware Design Engineer",
-    category: "Hardware & Electronics",
-  },
-  { slug: "pcb-design-engineer", name: "PCB Design Engineer", category: "Hardware & Electronics" },
-  { slug: "rf-engineer", name: "RF Engineer", category: "Hardware & Electronics" },
-  {
-    slug: "semiconductor-process-engineer",
-    name: "Semiconductor Process Engineer",
-    category: "Hardware & Electronics",
-  },
-
-  // Mechanical & Manufacturing
-  {
-    slug: "mechanical-design-engineer",
-    name: "Mechanical Design Engineer",
-    category: "Mechanical & Manufacturing",
-  },
-  {
-    slug: "automotive-engineer",
-    name: "Automotive Engineer",
-    category: "Mechanical & Manufacturing",
-  },
-  {
-    slug: "manufacturing-engineer",
-    name: "Manufacturing Engineer",
-    category: "Mechanical & Manufacturing",
-  },
-  { slug: "robotics-engineer", name: "Robotics Engineer", category: "Mechanical & Manufacturing" },
-  {
-    slug: "product-design-engineer",
-    name: "Product Design Engineer",
-    category: "Mechanical & Manufacturing",
-  },
-  { slug: "quality-engineer", name: "Quality Engineer", category: "Mechanical & Manufacturing" },
-  { slug: "hvac-engineer", name: "HVAC Engineer", category: "Mechanical & Manufacturing" },
-
-  // Civil & Infrastructure
-  { slug: "structural-engineer", name: "Structural Engineer", category: "Civil & Infrastructure" },
-  {
-    slug: "construction-manager",
-    name: "Construction Manager",
-    category: "Civil & Infrastructure",
-  },
-  {
-    slug: "transportation-engineer",
-    name: "Transportation Engineer",
-    category: "Civil & Infrastructure",
-  },
-  {
-    slug: "geotechnical-engineer",
-    name: "Geotechnical Engineer",
-    category: "Civil & Infrastructure",
-  },
-  {
-    slug: "environmental-engineer",
-    name: "Environmental Engineer",
-    category: "Civil & Infrastructure",
-  },
-
-  // Core & Cross-disciplinary
-  {
-    slug: "chemical-process-engineer",
-    name: "Chemical Process Engineer",
-    category: "Core & Cross-disciplinary",
-  },
-  { slug: "aerospace-engineer", name: "Aerospace Engineer", category: "Core & Cross-disciplinary" },
-  { slug: "systems-engineer", name: "Systems Engineer", category: "Core & Cross-disciplinary" },
-  { slug: "research-scientist", name: "Research Scientist", category: "Core & Cross-disciplinary" },
-  {
-    slug: "technical-product-manager",
-    name: "Technical Product Manager",
-    category: "Core & Cross-disciplinary",
-  },
-  {
-    slug: "engineering-consultant",
-    name: "Engineering Consultant",
-    category: "Core & Cross-disciplinary",
-  },
-];
+export {
+  BRANCH_OPTIONS as ENGINEERING_BRANCHES,
+  CAREER_OPTIONS as CAREERS,
+  isBranchSlug,
+  isCareerSlug,
+} from "./taxonomy-catalog";
 
 export const DEGREES = [
   "B.Tech",
@@ -236,12 +102,7 @@ export const COUNTRIES: CatalogEntry[] = [
   { slug: "OTHER", name: "Other" },
 ];
 
-const BRANCH_SLUGS = new Set(ENGINEERING_BRANCHES.map((b) => b.slug));
-const CAREER_SLUGS = new Set(CAREERS.map((c) => c.slug));
 const COUNTRY_CODES = new Set(COUNTRIES.map((c) => c.slug));
-
-export const isBranchSlug = (v: string) => BRANCH_SLUGS.has(v);
-export const isCareerSlug = (v: string) => CAREER_SLUGS.has(v);
 export const isCountryCode = (v: string) => COUNTRY_CODES.has(v);
 
 export const ONBOARDING_STEP_COUNT = 5;

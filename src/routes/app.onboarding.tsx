@@ -326,17 +326,21 @@ function Step2({ state, catalog, goto, afterSave, navigate }: StepProps) {
         Your branch is just your academic background — it doesn't lock you into a career. You'll
         pick a career direction separately in the next step.
       </p>
-      <Labeled label="Engineering branch" hint="optional">
+      <Labeled label="Engineering branch or specialization" hint="optional">
         <select
           className={fieldClass}
           value={branchSlug}
           onChange={(e) => setBranchSlug(e.target.value)}
         >
           <option value="">Select a branch…</option>
-          {catalog.branches.map((b) => (
-            <option key={b.slug} value={b.slug}>
-              {b.name}
-            </option>
+          {catalog.branchGroups.map((group) => (
+            <optgroup key={group.category} label={group.category}>
+              {group.branches.map((b) => (
+                <option key={b.slug} value={b.slug}>
+                  {b.name}
+                </option>
+              ))}
+            </optgroup>
           ))}
         </select>
       </Labeled>
