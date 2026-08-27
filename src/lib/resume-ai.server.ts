@@ -238,8 +238,12 @@ export class ResumeAIError extends Error {
   }
 }
 
+const IS_DEV = process.env["NODE_ENV"] !== "production";
+
 const USER_MESSAGES: Record<ResumeAIErrorCode, string> = {
-  not_configured: "Résumé analysis isn't available on this server yet.",
+  not_configured: IS_DEV
+    ? "Résumé analysis isn't configured. Set a valid ANTHROPIC_API_KEY (starts with sk-ant-) in .env and restart the dev server."
+    : "Résumé analysis isn't available on this server yet.",
   empty_text:
     "We couldn't read any text from that file. If it's a scanned PDF, upload a text-based one.",
   timeout: "The analysis took too long. Please try again.",
@@ -326,7 +330,18 @@ export type AnalyzeResult = {
 };
 
 async function realParse(text: string) {
-  if (!process.env["ANTHROPIC_API_KEY"] && !process.env["ANTHROPIC_AUTH_TOKEN"]) {
+  const key = process.env["ANTHROPIC_API_KEY"];
+  if (!key && !process.env["ANTHROPIC_AUTH_TOKEN"]) {
+    console.error("[resume-ai] ANTHROPIC_API_KEY / ANTHROPIC_AUTH_TOKEN is not set");
+    throw new ResumeAIError("not_configured", USER_MESSAGES.not_configured);
+  }
+  if (key && !key.startsWith("sk-ant-")) {
+    // Almost certainly a placeholder — fail fast with a clear server-side hint
+    // rather than burning a round-trip on a guaranteed 401. (Never logs the value.)
+    console.error(
+      `[resume-ai] ANTHROPIC_API_KEY does not look like a real key ` +
+        `(length ${key.length}, missing "sk-ant-" prefix) — replace it in .env`,
+    );
     throw new ResumeAIError("not_configured", USER_MESSAGES.not_configured);
   }
   const client = new Anthropic();
@@ -387,6 +402,9 @@ export function mapAnthropicError(err: unknown): ResumeAIError {
     err instanceof Anthropic.AuthenticationError ||
     err instanceof Anthropic.PermissionDeniedError
   ) {
+    console.error(
+      "[resume-ai] Anthropic rejected the credentials (401/403) — the ANTHROPIC_API_KEY in .env is invalid, revoked, or lacks access",
+    );
     return new ResumeAIError("not_configured", USER_MESSAGES.not_configured, err);
   }
   if (err instanceof Anthropic.APIError) {

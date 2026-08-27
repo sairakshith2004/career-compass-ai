@@ -132,11 +132,19 @@ describe("Phase 5 — Anthropic error mapping (no real API call)", () => {
     const rate = new Anthropic.RateLimitError(429, undefined, "rate limited", new Headers());
     expect(mapAnthropicError(rate).code).toBe("rate_limited");
 
-    const auth401 = new Anthropic.AuthenticationError(401, undefined, "bad key", new Headers());
+    const auth401 = new Anthropic.AuthenticationError(
+      401,
+      undefined,
+      "invalid x-api-key sk-ant-secret-detail",
+      new Headers(),
+    );
     const mappedAuth = mapAnthropicError(auth401);
     expect(mappedAuth.code).toBe("not_configured");
-    // The mapped message must never echo provider detail.
-    expect(mappedAuth.userMessage).not.toMatch(/key|401|auth/i);
+    // The mapped message must never echo the provider's raw error, status, or a key value.
+    expect(mappedAuth.userMessage).not.toContain("401");
+    expect(mappedAuth.userMessage).not.toContain("x-api-key");
+    expect(mappedAuth.userMessage).not.toContain("sk-ant-secret-detail");
+    expect(mappedAuth.userMessage).not.toContain("invalid x-api-key");
 
     const conn = new Anthropic.APIConnectionError({ message: "socket hang up" });
     expect(mapAnthropicError(conn).code).toBe("provider_error");
