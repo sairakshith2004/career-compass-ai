@@ -1,10 +1,12 @@
 import { db } from "./client";
-import { assessments, skills } from "./schema";
+import { assessments, careers, engineeringBranches, skills } from "./schema";
 import { SKILLS_CATALOG } from "../skills-catalog";
 import { ASSESSMENTS_CATALOG } from "../assessment-catalog";
+import { CAREERS, ENGINEERING_BRANCHES } from "../onboarding-catalog";
 
 let skillsSeeded = false;
 let assessmentsSeeded = false;
+let onboardingCatalogSeeded = false;
 
 /**
  * Idempotently seeds the canonical skills catalog into the `skills` table.
@@ -49,4 +51,25 @@ export async function ensureAssessmentsSeeded() {
     .onConflictDoNothing({ target: assessments.slug });
 
   assessmentsSeeded = true;
+}
+
+/**
+ * Idempotently seeds the engineering-branch and career reference tables from
+ * onboarding-catalog.ts. Called lazily from the onboarding server functions so
+ * a fresh database self-heals on first use.
+ */
+export async function ensureOnboardingCatalogSeeded() {
+  if (onboardingCatalogSeeded) return;
+
+  await db
+    .insert(engineeringBranches)
+    .values(ENGINEERING_BRANCHES.map((b) => ({ slug: b.slug, name: b.name })))
+    .onConflictDoNothing({ target: engineeringBranches.slug });
+
+  await db
+    .insert(careers)
+    .values(CAREERS.map((c) => ({ slug: c.slug, name: c.name, category: c.category })))
+    .onConflictDoNothing({ target: careers.slug });
+
+  onboardingCatalogSeeded = true;
 }

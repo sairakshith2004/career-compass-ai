@@ -1,5 +1,5 @@
-import { sql } from "drizzle-orm";
-import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+import { relations, sql } from "drizzle-orm";
+import { sqliteTable, text, integer, index, unique } from "drizzle-orm/sqlite-core";
 
 import { user } from "./auth-schema";
 
@@ -16,6 +16,110 @@ const timestamps = {
     .notNull()
     .default(sql`(unixepoch())`),
 };
+
+// --- Student onboarding / profile (Phase 2) -------------------------------
+//
+// `engineering_branches` and `careers` are reference tables — a student profile
+// points at them by id so we can later query "students in branch X" or
+// "students targeting career Y". Branch and career are deliberately unrelated:
+// the career picker offers every career regardless of the student's branch.
+// Seeded from src/lib/onboarding-catalog.ts (db/seed.ts).
+
+export const engineeringBranches = sqliteTable("engineering_branches", {
+  id: id(),
+  slug: text("slug").notNull().unique(),
+  name: text("name").notNull(),
+  ...timestamps,
+});
+
+export const careers = sqliteTable("careers", {
+  id: id(),
+  slug: text("slug").notNull().unique(),
+  name: text("name").notNull(),
+  category: text("category").notNull(),
+  ...timestamps,
+});
+
+// One row per user. Created on the first onboarding step save and filled in
+// progressively — every field except the goal status is nullable so a student
+// can skip optional questions. `lastCompletedStep` drives resume-on-return;
+// `onboardingCompletedAt` flips once step 5 (Review) is confirmed.
+export const studentProfiles = sqliteTable(
+  "student_profiles",
+  {
+    userId: text("user_id")
+      .primaryKey()
+      .references(() => user.id, { onDelete: "cascade" }),
+    // Step 1 — academic background
+    degree: text("degree"),
+    branchId: text("branch_id").references(() => engineeringBranches.id, {
+      onDelete: "set null",
+    }),
+    collegeName: text("college_name"),
+    countryCode: text("country_code"),
+    // Step 3 — current year / graduation
+    currentYear: text("current_year", {
+      enum: ["first", "second", "third", "fourth", "fifth", "graduated"],
+    }),
+    graduationYear: integer("graduation_year"),
+    // Step 4 — career direction
+    experienceLevel: text("experience_level", {
+      enum: ["student", "internship", "junior", "mid", "senior"],
+    }),
+    careerGoalStatus: text("career_goal_status", {
+      enum: ["known", "exploring", "unsure"],
+    }),
+    // Onboarding progress
+    lastCompletedStep: integer("last_completed_step").notNull().default(0),
+    onboardingCompletedAt: integer("onboarding_completed_at", { mode: "timestamp" }),
+    ...timestamps,
+  },
+  (table) => [
+    index("student_profiles_branch_idx").on(table.branchId),
+    index("student_profiles_country_idx").on(table.countryCode),
+  ],
+);
+
+// The student's target career(s). Many-to-many so it covers both "I know
+// exactly what I want" (one row) and "I have a few options" (several); empty
+// when the student is unsure.
+export const studentTargetCareers = sqliteTable(
+  "student_target_careers",
+  {
+    id: id(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    careerId: text("career_id")
+      .notNull()
+      .references(() => careers.id, { onDelete: "cascade" }),
+    ...timestamps,
+  },
+  (table) => [
+    unique("student_target_careers_user_career_unique").on(table.userId, table.careerId),
+    index("student_target_careers_user_idx").on(table.userId),
+  ],
+);
+
+export const studentProfileRelations = relations(studentProfiles, ({ one, many }) => ({
+  user: one(user, { fields: [studentProfiles.userId], references: [user.id] }),
+  branch: one(engineeringBranches, {
+    fields: [studentProfiles.branchId],
+    references: [engineeringBranches.id],
+  }),
+  targetCareers: many(studentTargetCareers),
+}));
+
+export const studentTargetCareerRelations = relations(studentTargetCareers, ({ one }) => ({
+  profile: one(studentProfiles, {
+    fields: [studentTargetCareers.userId],
+    references: [studentProfiles.userId],
+  }),
+  career: one(careers, {
+    fields: [studentTargetCareers.careerId],
+    references: [careers.id],
+  }),
+}));
 
 // One row per user, backing the "Career preferences" panel on Settings.
 // (Name/email/avatar live on better-auth's own `user` table — see auth-schema.ts.)

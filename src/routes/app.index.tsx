@@ -1,7 +1,17 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowRight, CheckCircle2, FileText, Target, AlertTriangle, XCircle } from "lucide-react";
+import {
+  ArrowRight,
+  CheckCircle2,
+  FileText,
+  Target,
+  AlertTriangle,
+  XCircle,
+  GraduationCap,
+  UserRoundCog,
+} from "lucide-react";
 import { Panel, Badge, EmptyState } from "@/components/worklens/Panel";
 import { getDashboardData } from "@/lib/server-fns";
+import { getProfileSummary } from "@/lib/onboarding-fns";
 
 export const Route = createFileRoute("/app/")({
   head: () => ({
@@ -19,12 +29,105 @@ export const Route = createFileRoute("/app/")({
       },
     ],
   }),
-  loader: () => getDashboardData(),
+  loader: async () => {
+    const [data, profile] = await Promise.all([getDashboardData(), getProfileSummary()]);
+    return { data, profile };
+  },
   component: Dashboard,
 });
 
+function ProfileSummaryCard({
+  profile,
+}: {
+  profile: Awaited<ReturnType<typeof getProfileSummary>>;
+}) {
+  if (!profile) return null;
+
+  if (!profile.completed) {
+    const pct = Math.round((Math.min(profile.lastCompletedStep, 5) / 5) * 100);
+    return (
+      <Panel title="Your profile">
+        <EmptyState
+          icon={<GraduationCap className="size-6" />}
+          title={
+            profile.lastCompletedStep > 0
+              ? "Finish setting up your student profile"
+              : "Set up your student profile"
+          }
+          description={
+            profile.lastCompletedStep > 0
+              ? `You're ${pct}% through. Pick up where you left off.`
+              : "Tell us about your degree, branch, year and career direction so WorkLens can tailor everything to you."
+          }
+          action={
+            <Link
+              to="/app/onboarding"
+              className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
+            >
+              {profile.lastCompletedStep > 0 ? "Resume setup" : "Start setup"}
+              <ArrowRight className="size-4" />
+            </Link>
+          }
+        />
+      </Panel>
+    );
+  }
+
+  const facts: [string, string | number | null][] = [
+    ["Degree", profile.degree],
+    ["Branch", profile.branch],
+    ["College", profile.collegeName],
+    ["Country", profile.country],
+    ["Year", profile.currentYear],
+    ["Graduation", profile.graduationYear],
+    ["Experience", profile.experienceLevel],
+    ["Career goal", profile.careerGoalStatus],
+  ];
+
+  return (
+    <Panel
+      title="Your profile"
+      action={
+        <Link
+          to="/app/onboarding"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-input px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
+        >
+          <UserRoundCog className="size-3.5" />
+          Edit
+        </Link>
+      }
+    >
+      <p className="text-lg font-semibold tracking-tight">{profile.fullName}</p>
+      <dl className="mt-3 grid gap-x-6 gap-y-2 sm:grid-cols-2">
+        {facts
+          .filter(([, v]) => v != null && v !== "")
+          .map(([k, v]) => (
+            <div key={k} className="flex justify-between gap-3 text-sm">
+              <dt className="text-muted-foreground">{k}</dt>
+              <dd className="text-right font-medium text-foreground">{v}</dd>
+            </div>
+          ))}
+      </dl>
+      {profile.targetCareers.length > 0 && (
+        <div className="mt-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Target career{profile.targetCareers.length > 1 ? "s" : ""}
+          </p>
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {profile.targetCareers.map((c) => (
+              <Badge key={c} tone="primary">
+                {c}
+              </Badge>
+            ))}
+          </div>
+        </div>
+      )}
+    </Panel>
+  );
+}
+
 function Dashboard() {
-  const data = Route.useLoaderData();
+  const { data, profile } = Route.useLoaderData();
 
   if (!data.signedIn) {
     return (
@@ -74,6 +177,7 @@ function Dashboard() {
     return (
       <div className="space-y-6">
         {header}
+        <ProfileSummaryCard profile={profile} />
         <Panel title="Get started">
           <EmptyState
             icon={<FileText className="size-6" />}
@@ -97,6 +201,7 @@ function Dashboard() {
     return (
       <div className="space-y-6">
         {header}
+        <ProfileSummaryCard profile={profile} />
         <Panel
           title="Skills detected in your resume"
           description="Analyze a job description to see your readiness score against it."
@@ -137,6 +242,8 @@ function Dashboard() {
   return (
     <div className="space-y-6">
       {header}
+
+      <ProfileSummaryCard profile={profile} />
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Panel title="Job readiness" className="lg:col-span-1">

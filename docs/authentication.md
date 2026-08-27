@@ -6,16 +6,16 @@ libSQL). Phase 1 hardened that setup rather than replacing it.
 
 ## Routes
 
-| Route              | Purpose                                             | Guard                                  |
-| ------------------ | -------------------------------------------------- | -------------------------------------- |
-| `/`                | Landing page                                        | Redirects to `/app` if already signed in |
-| `/login`           | Email + password sign-in                           | Redirects to `/app` (or `?redirect=`) if signed in |
-| `/signup`          | Create account (name, email, password, confirm)    | Redirects to `/app` if signed in       |
-| `/forgot-password` | Request a reset link                               | Public                                 |
-| `/reset-password`  | Set a new password from a `?token=`                | Public                                 |
-| `/app/*`           | The authenticated application                       | `requireAuth` in `app.tsx` `beforeLoad` → `/login?redirect=<path>` |
-| `/app/onboarding`  | Post-signup welcome screen                          | Under the `/app` guard                  |
-| `/api/auth/$`      | better-auth request handler (all auth endpoints)    | better-auth's own origin + rate-limit checks |
+| Route              | Purpose                                          | Guard                                                              |
+| ------------------ | ------------------------------------------------ | ------------------------------------------------------------------ |
+| `/`                | Landing page                                     | Redirects to `/app` if already signed in                           |
+| `/login`           | Email + password sign-in                         | Redirects to `/app` (or `?redirect=`) if signed in                 |
+| `/signup`          | Create account (name, email, password, confirm)  | Redirects to `/app` if signed in                                   |
+| `/forgot-password` | Request a reset link                             | Public                                                             |
+| `/reset-password`  | Set a new password from a `?token=`              | Public                                                             |
+| `/app/*`           | The authenticated application                    | `requireAuth` in `app.tsx` `beforeLoad` → `/login?redirect=<path>` |
+| `/app/onboarding`  | Post-signup welcome screen                       | Under the `/app` guard                                             |
+| `/api/auth/$`      | better-auth request handler (all auth endpoints) | better-auth's own origin + rate-limit checks                       |
 
 ## User flow
 
@@ -71,12 +71,12 @@ better-auth's built-in limiter, `storage: "database"` (an in-memory counter
 would reset on every serverless cold start). Global 100 req / 60 s per IP, with
 stricter per-route rules:
 
-| Endpoint                   | Limit          |
-| -------------------------- | -------------- |
-| `/sign-in/email`           | 5 / 60 s       |
-| `/sign-up/email`           | 5 / 60 s       |
-| `/request-password-reset`  | 3 / 15 min     |
-| `/reset-password`          | 5 / 15 min     |
+| Endpoint                  | Limit      |
+| ------------------------- | ---------- |
+| `/sign-in/email`          | 5 / 60 s   |
+| `/sign-up/email`          | 5 / 60 s   |
+| `/request-password-reset` | 3 / 15 min |
+| `/reset-password`         | 5 / 15 min |
 
 Exceeding a limit returns `429` with a generic body.
 
