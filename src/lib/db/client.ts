@@ -12,4 +12,18 @@ const authToken = process.env["DATABASE_AUTH_TOKEN"];
 
 const client = createClient(authToken ? { url, authToken } : { url });
 
+// For a local file, put SQLite in WAL mode with a generous busy timeout. This
+// lets the dev server, drizzle-kit, tests and one-off scripts touch the same
+// `dev.db` concurrently without "database is locked" / readonly errors. No-op
+// (and harmless if it fails) against a remote Turso URL.
+if (url.startsWith("file:")) {
+  void client
+    .executeMultiple(
+      "PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000; PRAGMA foreign_keys = ON;",
+    )
+    .catch(() => {
+      /* remote client, or a race during startup — not fatal */
+    });
+}
+
 export const db = drizzle(client, { schema: { ...authSchema, ...appSchema } });
