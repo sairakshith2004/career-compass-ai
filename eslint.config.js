@@ -36,5 +36,12 @@ export default tseslint.config(
       "@typescript-eslint/no-unused-vars": "off",
     },
   },
+  {
+    // Test files assert against loosely-typed auth-endpoint JSON payloads.
+    files: ["tests/**/*.{ts,tsx}"],
+    rules: {
+      "@typescript-eslint/no-explicit-any": "off",
+    },
+  },
   eslintPluginPrettier,
 );

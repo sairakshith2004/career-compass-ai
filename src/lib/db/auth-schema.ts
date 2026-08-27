@@ -1,20 +1,34 @@
 import { relations, sql } from "drizzle-orm";
 import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core";
 
-export const user = sqliteTable("user", {
-  id: text("id").primaryKey(),
-  name: text("name").notNull(),
-  email: text("email").notNull().unique(),
-  emailVerified: integer("email_verified", { mode: "boolean" }).default(false).notNull(),
-  image: text("image"),
-  createdAt: integer("created_at", { mode: "timestamp_ms" })
-    .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
-    .notNull(),
-  updatedAt: integer("updated_at", { mode: "timestamp_ms" })
-    .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
-    .$onUpdate(() => /* @__PURE__ */ new Date())
-    .notNull(),
-});
+export const user = sqliteTable(
+  "user",
+  {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    email: text("email").notNull().unique(),
+    emailVerified: integer("email_verified", { mode: "boolean" }).default(false).notNull(),
+    image: text("image"),
+    // Account lifecycle. `suspended`/`deleted` accounts keep failing the
+    // `getSessionUser` check even if they hold a live session cookie — see
+    // src/lib/auth-guard.ts. Set by better-auth's `additionalFields`, never by
+    // client input.
+    status: text("status", { enum: ["active", "suspended", "deleted"] })
+      .default("active")
+      .notNull(),
+    // Stamped by the `session.create` database hook in src/lib/auth.ts on every
+    // fresh sign-in (not on background session refresh).
+    lastLoginAt: integer("last_login_at", { mode: "timestamp_ms" }),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [index("user_status_idx").on(table.status)],
+);
 
 export const session = sqliteTable(
   "session",
@@ -84,6 +98,23 @@ export const verification = sqliteTable(
   },
   (table) => [index("verification_identifier_idx").on(table.identifier)],
 );
+
+/**
+ * Backs better-auth's built-in rate limiter when `rateLimit.storage` is
+ * `"database"` (src/lib/auth.ts). One row per limiter key (per-IP, per-path);
+ * better-auth reads/writes it through the drizzle adapter under the model name
+ * `rateLimit`, so the schema export must be named `rateLimit` and expose the
+ * `id` / `key` / `count` / `lastRequest` fields (better-auth's generic adapter
+ * layer stamps every row with a generated `id`, then looks rows up by `key`).
+ */
+export const rateLimit = sqliteTable("rate_limit", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  key: text("key").notNull().unique(),
+  count: integer("count").notNull(),
+  lastRequest: integer("last_request").notNull(),
+});
 
 export const userRelations = relations(user, ({ many }) => ({
   sessions: many(session),

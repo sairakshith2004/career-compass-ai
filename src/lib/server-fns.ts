@@ -4,6 +4,7 @@ import { and, desc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 
 import { auth, enabledProviders } from "./auth";
+import { readSessionUser } from "./session.server";
 import { getAssessmentDef } from "./assessment-catalog";
 import { db } from "./db/client";
 import { ensureAssessmentsSeeded, ensureSkillsSeeded } from "./db/seed";
@@ -29,11 +30,14 @@ export const getEnabledProviders = createServerFn({ method: "GET" }).handler(
   () => enabledProviders,
 );
 
-/** Current member, or null if signed out — read from the better-auth session cookie. */
-export const getCurrentUser = createServerFn({ method: "GET" }).handler(async () => {
-  const session = await auth.api.getSession({ headers: getRequestHeaders() });
-  return session?.user ?? null;
-});
+/**
+ * Current member, or null if signed out — read from the HttpOnly session cookie
+ * and gated on account status (see `readSessionUser`). Kept as a thin alias of
+ * `getSessionUser` so existing callers don't churn.
+ */
+export const getCurrentUser = createServerFn({ method: "GET" }).handler(() =>
+  readSessionUser(getRequestHeaders()),
+);
 
 /** Signed-in member's saved career preferences, or null if signed out / not set yet. */
 export const getPreferences = createServerFn({ method: "GET" }).handler(async () => {

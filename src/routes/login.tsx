@@ -1,22 +1,36 @@
 import { useState, type FormEvent } from "react";
 import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
+import { z } from "zod";
 import { Sparkles } from "lucide-react";
 
 import { signIn } from "@/lib/auth-client";
-import { getCurrentUser, getEnabledProviders } from "@/lib/server-fns";
+import { getSessionUser } from "@/lib/auth-guard";
+import { getEnabledProviders } from "@/lib/server-fns";
 import {
   OAuthProviders,
   startSocialSignIn,
   type OAuthProviderId,
 } from "@/components/worklens/OAuthProviders";
 
+const searchSchema = z.object({
+  // Where to send the user after a successful sign-in. Constrained to an app-
+  // internal path so it can't be turned into an open redirect.
+  redirect: z.string().optional().catch(undefined),
+});
+
+function safeRedirect(target: string | undefined): string {
+  if (target && target.startsWith("/") && !target.startsWith("//")) return target;
+  return "/app";
+}
+
 export const Route = createFileRoute("/login")({
   head: () => ({
     meta: [{ title: "Sign in — WorkLens" }],
   }),
-  beforeLoad: async () => {
-    const user = await getCurrentUser();
-    if (user) throw redirect({ to: "/app" });
+  validateSearch: searchSchema,
+  beforeLoad: async ({ search }) => {
+    const user = await getSessionUser();
+    if (user) throw redirect({ to: safeRedirect(search.redirect) });
   },
   loader: () => getEnabledProviders(),
   component: Login,
@@ -25,8 +39,22 @@ export const Route = createFileRoute("/login")({
 const inputClass =
   "w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50";
 
+/** Maps better-auth error codes to a single generic message (no account enumeration). */
+function loginErrorMessage(code: string | undefined, status: number | undefined): string {
+  if (status === 429) return "Too many attempts. Please wait a minute and try again.";
+  switch (code) {
+    case "INVALID_EMAIL_OR_PASSWORD":
+    case "USER_NOT_FOUND":
+    case "INVALID_PASSWORD":
+      return "Incorrect email or password.";
+    default:
+      return "Couldn't sign you in. Check your details and try again.";
+  }
+}
+
 function Login() {
   const enabled = Route.useLoaderData();
+  const search = Route.useSearch();
   const navigate = useNavigate();
 
   const [email, setEmail] = useState("");
@@ -48,15 +76,22 @@ function Login() {
     setError(null);
     setPending("email");
 
-    const { error: authError } = await signIn.email({ email: email.trim(), password });
-    if (authError) {
-      // Deliberately generic — don't confirm/deny whether the email is registered.
-      setError(authError.message ?? "Incorrect email or password.");
+    try {
+      const { error: authError } = await signIn.email({
+        email: email.trim(),
+        password,
+      });
+      if (authError) {
+        setError(loginErrorMessage(authError.code, authError.status));
+        setPending(null);
+        return;
+      }
+      await navigate({ to: safeRedirect(search.redirect) });
+    } catch {
+      // Network / unexpected transport failure.
+      setError("Network problem — check your connection and try again.");
       setPending(null);
-      return;
     }
-
-    await navigate({ to: "/app" });
   }
 
   return (
@@ -72,7 +107,7 @@ function Login() {
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-3">
+        <form onSubmit={handleSubmit} className="space-y-3" noValidate>
           <input
             type="email"
             required
@@ -102,23 +137,27 @@ function Login() {
           </button>
         </form>
 
-        {error && <p className="mt-4 text-center text-sm text-destructive">{error}</p>}
+        {error && (
+          <p role="alert" className="mt-4 text-center text-sm text-destructive">
+            {error}
+          </p>
+        )}
 
         <OAuthProviders enabled={enabled} pending={pending} onSelect={handleOAuth} />
 
-        <p className="mt-6 text-center text-xs text-muted-foreground">
-          Don't have an account?{" "}
-          <Link to="/signup" className="font-medium text-foreground hover:text-primary">
-            Create account
-          </Link>
-        </p>
-
-        <button
-          onClick={() => navigate({ to: "/app" })}
-          className="mt-4 w-full text-center text-xs text-muted-foreground hover:text-foreground"
-        >
-          Continue browsing without an account →
-        </button>
+        <div className="mt-6 space-y-2 text-center text-xs text-muted-foreground">
+          <p>
+            <Link to="/forgot-password" className="font-medium text-foreground hover:text-primary">
+              Forgot password?
+            </Link>
+          </p>
+          <p>
+            Don't have an account?{" "}
+            <Link to="/signup" className="font-medium text-foreground hover:text-primary">
+              Create account
+            </Link>
+          </p>
+        </div>
       </div>
     </div>
   );

@@ -1,6 +1,21 @@
 import { createStart, createCsrfMiddleware, createMiddleware } from "@tanstack/react-start";
 
 import { renderErrorPage } from "./lib/error-page";
+import { applySecurityHeaders } from "./lib/security-headers";
+
+// Adds CSP + hardening headers to every response (SSR documents, server routes,
+// server-function RPCs). Outermost so it also stamps the error responses below.
+const securityHeadersMiddleware = createMiddleware().server(async ({ next }) => {
+  const result = await next();
+  try {
+    if (result.response instanceof Response) {
+      result.response = applySecurityHeaders(result.response);
+    }
+  } catch (err) {
+    console.error("[securityHeadersMiddleware] failed:", err);
+  }
+  return result;
+});
 
 const errorMiddleware = createMiddleware().server(async ({ next }) => {
   try {
@@ -25,5 +40,5 @@ const csrfMiddleware = createCsrfMiddleware({
 });
 
 export const startInstance = createStart(() => ({
-  requestMiddleware: [errorMiddleware, csrfMiddleware],
+  requestMiddleware: [securityHeadersMiddleware, errorMiddleware, csrfMiddleware],
 }));

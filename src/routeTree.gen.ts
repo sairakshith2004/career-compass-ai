@@ -11,11 +11,14 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppRouteImport } from './routes/app'
+import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as AppIndexRouteImport } from './routes/app.index'
 import { Route as AppAssessmentsRouteImport } from './routes/app.assessments'
 import { Route as AppJobsRouteImport } from './routes/app.jobs'
+import { Route as AppOnboardingRouteImport } from './routes/app.onboarding'
 import { Route as AppResumeRouteImport } from './routes/app.resume'
 import { Route as AppRoadmapRouteImport } from './routes/app.roadmap'
 import { Route as AppSettingsRouteImport } from './routes/app.settings'
@@ -32,9 +35,19 @@ const AppRoute = AppRouteImport.update({
   path: '/app',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
+  id: '/forgot-password',
+  path: '/forgot-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SignupRoute = SignupRouteImport.update({
@@ -55,6 +68,11 @@ const AppAssessmentsRoute = AppAssessmentsRouteImport.update({
 const AppJobsRoute = AppJobsRouteImport.update({
   id: '/jobs',
   path: '/jobs',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppOnboardingRoute = AppOnboardingRouteImport.update({
+  id: '/onboarding',
+  path: '/onboarding',
   getParentRoute: () => AppRoute,
 } as any)
 const AppResumeRoute = AppResumeRouteImport.update({
@@ -86,10 +104,13 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
+  '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
   '/app/assessments': typeof AppAssessmentsRoute
   '/app/jobs': typeof AppJobsRoute
+  '/app/onboarding': typeof AppOnboardingRoute
   '/app/resume': typeof AppResumeRoute
   '/app/roadmap': typeof AppRoadmapRoute
   '/app/settings': typeof AppSettingsRoute
@@ -99,10 +120,13 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
   '/app/assessments': typeof AppAssessmentsRoute
   '/app/jobs': typeof AppJobsRoute
+  '/app/onboarding': typeof AppOnboardingRoute
   '/app/resume': typeof AppResumeRoute
   '/app/roadmap': typeof AppRoadmapRoute
   '/app/settings': typeof AppSettingsRoute
@@ -114,10 +138,13 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
+  '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
   '/app/assessments': typeof AppAssessmentsRoute
   '/app/jobs': typeof AppJobsRoute
+  '/app/onboarding': typeof AppOnboardingRoute
   '/app/resume': typeof AppResumeRoute
   '/app/roadmap': typeof AppRoadmapRoute
   '/app/settings': typeof AppSettingsRoute
@@ -130,10 +157,13 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/app'
+    | '/forgot-password'
     | '/login'
+    | '/reset-password'
     | '/signup'
     | '/app/assessments'
     | '/app/jobs'
+    | '/app/onboarding'
     | '/app/resume'
     | '/app/roadmap'
     | '/app/settings'
@@ -143,10 +173,13 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/forgot-password'
     | '/login'
+    | '/reset-password'
     | '/signup'
     | '/app/assessments'
     | '/app/jobs'
+    | '/app/onboarding'
     | '/app/resume'
     | '/app/roadmap'
     | '/app/settings'
@@ -157,10 +190,13 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/app'
+    | '/forgot-password'
     | '/login'
+    | '/reset-password'
     | '/signup'
     | '/app/assessments'
     | '/app/jobs'
+    | '/app/onboarding'
     | '/app/resume'
     | '/app/roadmap'
     | '/app/settings'
@@ -172,7 +208,9 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AppRoute: typeof AppRouteWithChildren
+  ForgotPasswordRoute: typeof ForgotPasswordRoute
   LoginRoute: typeof LoginRoute
+  ResetPasswordRoute: typeof ResetPasswordRoute
   SignupRoute: typeof SignupRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
 }
@@ -193,11 +231,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/forgot-password': {
+      id: '/forgot-password'
+      path: '/forgot-password'
+      fullPath: '/forgot-password'
+      preLoaderRoute: typeof ForgotPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/login': {
       id: '/login'
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/signup': {
@@ -226,6 +278,13 @@ declare module '@tanstack/react-router' {
       path: '/jobs'
       fullPath: '/app/jobs'
       preLoaderRoute: typeof AppJobsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/onboarding': {
+      id: '/app/onboarding'
+      path: '/onboarding'
+      fullPath: '/app/onboarding'
+      preLoaderRoute: typeof AppOnboardingRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/resume': {
@@ -269,6 +328,7 @@ declare module '@tanstack/react-router' {
 interface AppRouteChildren {
   AppAssessmentsRoute: typeof AppAssessmentsRoute
   AppJobsRoute: typeof AppJobsRoute
+  AppOnboardingRoute: typeof AppOnboardingRoute
   AppResumeRoute: typeof AppResumeRoute
   AppRoadmapRoute: typeof AppRoadmapRoute
   AppSettingsRoute: typeof AppSettingsRoute
@@ -279,6 +339,7 @@ interface AppRouteChildren {
 const AppRouteChildren: AppRouteChildren = {
   AppAssessmentsRoute: AppAssessmentsRoute,
   AppJobsRoute: AppJobsRoute,
+  AppOnboardingRoute: AppOnboardingRoute,
   AppResumeRoute: AppResumeRoute,
   AppRoadmapRoute: AppRoadmapRoute,
   AppSettingsRoute: AppSettingsRoute,
@@ -291,7 +352,9 @@ const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AppRoute: AppRouteWithChildren,
+  ForgotPasswordRoute: ForgotPasswordRoute,
   LoginRoute: LoginRoute,
+  ResetPasswordRoute: ResetPasswordRoute,
   SignupRoute: SignupRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
 }
