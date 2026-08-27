@@ -16,6 +16,7 @@
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.120.0",
     "@hookform/resolvers": "^5.2.2",
     "@libsql/client": "^0.17.4",
     "@radix-ui/react-accordion": "^1.2.12",

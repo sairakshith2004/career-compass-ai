@@ -235,23 +235,161 @@ export const userPreferences = sqliteTable("user_preferences", {
   ...timestamps,
 });
 
-// Resume page — "Upload resume".
-export const resumes = sqliteTable("resumes", {
-  id: id(),
-  userId: text("user_id")
-    .notNull()
-    .references(() => user.id, { onDelete: "cascade" }),
-  fileName: text("file_name").notNull(),
-  storageKey: text("storage_key").notNull(),
-  mimeType: text("mime_type").notNull(),
-  sizeBytes: integer("size_bytes").notNull(),
-  status: text("status", { enum: ["uploaded", "parsing", "parsed", "failed"] })
-    .notNull()
-    .default("uploaded"),
-  structuredData: text("structured_data", { mode: "json" }).$type<Record<string, unknown>>(),
-  parsedAt: integer("parsed_at", { mode: "timestamp" }),
-  ...timestamps,
-});
+// --- Resume intelligence (Phase 4) --------------------------------------
+//
+// Pipeline: upload → validate/scan → extract text → run AI analysis.
+// `status` mirrors the UI processing states. AI-detected information is stored
+// in `resume_analyses` / `resume_skills` / `resume_career_signals`, kept
+// SEPARATE from the student's DECLARED profile (student_profiles); a
+// disagreement is surfaced, never silently applied.
+export const resumes = sqliteTable(
+  "resumes",
+  {
+    id: id(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    // `fileName` is the sanitized, safe-to-display basename (see resume-upload.server.ts).
+    fileName: text("file_name").notNull(),
+    // Opaque storage key `<userId>/<uuid>.<ext>` — never a client-controlled path.
+    storageKey: text("storage_key").notNull(),
+    mimeType: text("mime_type").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    // Processing state machine. `uploaded` → `processing` (extract) →
+    // `analyzing` (AI) → `complete` | `failed`. Retry re-runs from `analyzing`.
+    status: text("status", {
+      enum: ["uploaded", "processing", "analyzing", "complete", "failed"],
+    })
+      .notNull()
+      .default("uploaded"),
+    // Extracted plain text, kept for evidence-linking and re-analysis. Private,
+    // owner-scoped, capped in length — this is storage, not logging.
+    extractedText: text("extracted_text"),
+    textCharCount: integer("text_char_count"),
+    // User-safe failure reason for the `failed` state (never a stack trace).
+    errorMessage: text("error_message"),
+    analysisModel: text("analysis_model"),
+    analyzedAt: integer("analyzed_at", { mode: "timestamp" }),
+    // Deprecated (Phase 0): kept so the Phase 4 migration is purely additive.
+    structuredData: text("structured_data", { mode: "json" }).$type<Record<string, unknown>>(),
+    parsedAt: integer("parsed_at", { mode: "timestamp" }),
+    ...timestamps,
+  },
+  (table) => [index("resumes_user_idx").on(table.userId)],
+);
+
+// One row per completed AI analysis of a resume (latest per resume is "current").
+// Columns hold the queryable AI classification + confidences; `payload` holds the
+// validated rich extraction (education, projects, experience, certifications,
+// achievements) as a schema-checked JSON document.
+export const resumeAnalyses = sqliteTable(
+  "resume_analyses",
+  {
+    id: id(),
+    resumeId: text("resume_id")
+      .notNull()
+      .references(() => resumes.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    // AI-detected academic classification (NOT written to student_profiles).
+    aiBranchSlug: text("ai_branch_slug"),
+    aiBranchConfidence: integer("ai_branch_confidence"), // 0–100
+    aiSpecialization: text("ai_specialization"),
+    aiSpecializationConfidence: integer("ai_specialization_confidence"),
+    aiExperienceLevel: text("ai_experience_level", {
+      enum: ["student", "internship", "junior", "mid", "senior"],
+    }),
+    aiExperienceConfidence: integer("ai_experience_confidence"),
+    // Extracted, as text (the AI's reading of the resume — not authoritative).
+    extractedName: text("extracted_name"),
+    extractedCollege: text("extracted_college"),
+    extractedDegree: text("extracted_degree"),
+    extractedGraduationYear: integer("extracted_graduation_year"),
+    summary: text("summary"),
+    projectDomains: text("project_domains", { mode: "json" }).$type<string[]>(),
+    payload: text("payload", { mode: "json" }).$type<Record<string, unknown>>().notNull(),
+    model: text("model").notNull(),
+    promptVersion: text("prompt_version").notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    index("resume_analyses_resume_idx").on(table.resumeId),
+    index("resume_analyses_user_idx").on(table.userId),
+  ],
+);
+
+// Detected skills with EVIDENCE. A skill from a resume is at most
+// `supported_by_resume` — never `assessed` / `project_verified` from text alone.
+export const resumeSkills = sqliteTable(
+  "resume_skills",
+  {
+    id: id(),
+    analysisId: text("analysis_id")
+      .notNull()
+      .references(() => resumeAnalyses.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    // Matched catalog skill, or null when the AI named a skill we don't catalog.
+    skillId: text("skill_id").references(() => skills.id, { onDelete: "set null" }),
+    skillNameRaw: text("skill_name_raw").notNull(),
+    kind: text("kind", {
+      enum: ["language", "framework", "tool", "database", "cloud", "concept", "other"],
+    })
+      .notNull()
+      .default("other"),
+    evidenceType: text("evidence_type", {
+      enum: ["claimed", "supported_by_resume", "assessed", "project_verified"],
+    })
+      .notNull()
+      .default("claimed"),
+    confidence: integer("confidence").notNull().default(0), // 0–100
+    // [{ kind: "project"|"internship"|"experience"|"certification"|"education", label: string }]
+    evidence: text("evidence", { mode: "json" }).$type<{ kind: string; label: string }[]>(),
+    ...timestamps,
+  },
+  (table) => [
+    unique("resume_skills_analysis_name_unique").on(table.analysisId, table.skillNameRaw),
+    index("resume_skills_analysis_idx").on(table.analysisId),
+    index("resume_skills_user_idx").on(table.userId),
+  ],
+);
+
+// AI-suggested career paths from the resume. Recommendations, not classifications
+// (the UI states this). `score` is the AI's fit estimate 0–100.
+export const resumeCareerSignals = sqliteTable(
+  "resume_career_signals",
+  {
+    id: id(),
+    analysisId: text("analysis_id")
+      .notNull()
+      .references(() => resumeAnalyses.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    careerId: text("career_id").references(() => careers.id, { onDelete: "set null" }),
+    careerTitleRaw: text("career_title_raw").notNull(),
+    score: integer("score").notNull().default(0), // 0–100
+    rationale: text("rationale"),
+    ...timestamps,
+  },
+  (table) => [
+    index("resume_career_signals_analysis_idx").on(table.analysisId),
+    index("resume_career_signals_user_idx").on(table.userId),
+  ],
+);
+
+export const resumeRelations = relations(resumes, ({ one, many }) => ({
+  user: one(user, { fields: [resumes.userId], references: [user.id] }),
+  analyses: many(resumeAnalyses),
+}));
+
+export const resumeAnalysisRelations = relations(resumeAnalyses, ({ one, many }) => ({
+  resume: one(resumes, { fields: [resumeAnalyses.resumeId], references: [resumes.id] }),
+  skills: many(resumeSkills),
+  careerSignals: many(resumeCareerSignals),
+}));
 
 // Skills page — canonical skill catalog + per-user claimed/verified levels.
 export const skills = sqliteTable("skills", {

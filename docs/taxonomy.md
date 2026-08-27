@@ -33,13 +33,13 @@ careers ──┬─────────────────────
           └────────────────────────────────── skills
 ```
 
-| Table | Purpose |
-|---|---|
-| `engineering_categories` | ~20 broad disciplines (CS/IT, Electronics, Mechanical, …), `slug`, `name`, `description`, `sort_order`. |
-| `engineering_branches` | ~72 specific branches / specializations, each `category_id` → a category, plus `aliases` (JSON) and `description`. The CS/IT category holds Computer Science, IT, Information Science, Software Engineering, AI, ML, AI & Data Science, Data Science, Cyber Security, Cloud Computing, IoT, Blockchain, Computer Networks, … |
-| `careers` | ~62 **career paths, defined independently of any branch**. `slug`, `name`, `category` (display group), `description`. |
-| `branch_career_paths` | **"careers compatible with a branch"** — M:N, `relevance ∈ {primary, common, possible}`. `unique(branch_id, career_id)`. |
-| `career_skill_requirements` | **CareerSkillRequirement** — M:N career ↔ `skills`, `importance ∈ {core, important, helpful}`. `unique(career_id, skill_id)`. |
+| Table                       | Purpose                                                                                                                                                                                                                                                                                                                      |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `engineering_categories`    | ~20 broad disciplines (CS/IT, Electronics, Mechanical, …), `slug`, `name`, `description`, `sort_order`.                                                                                                                                                                                                                      |
+| `engineering_branches`      | ~72 specific branches / specializations, each `category_id` → a category, plus `aliases` (JSON) and `description`. The CS/IT category holds Computer Science, IT, Information Science, Software Engineering, AI, ML, AI & Data Science, Data Science, Cyber Security, Cloud Computing, IoT, Blockchain, Computer Networks, … |
+| `careers`                   | ~62 **career paths, defined independently of any branch**. `slug`, `name`, `category` (display group), `description`.                                                                                                                                                                                                        |
+| `branch_career_paths`       | **"careers compatible with a branch"** — M:N, `relevance ∈ {primary, common, possible}`. `unique(branch_id, career_id)`.                                                                                                                                                                                                     |
+| `career_skill_requirements` | **CareerSkillRequirement** — M:N career ↔ `skills`, `importance ∈ {core, important, helpful}`. `unique(career_id, skill_id)`.                                                                                                                                                                                                |
 
 `skills` (pre-existing) was extended with ~100 domain skills — embedded/VLSI,
 mechanical/CAD/CAE, civil, chemical/process, robotics, automotive/aerospace,
@@ -54,7 +54,7 @@ either form, so existing profiles and callers keep working.
 ## Branch ≠ career
 
 - Career paths carry **no branch in their identity**. `branch_career_paths` only
-  expresses *accessibility*.
+  expresses _accessibility_.
 - **The same career is reachable from many branches.** `Software Engineer` links
   to **all 72 branches** (`universalRelevance: "possible"`, upgraded to `primary`
   for CS branches and `common` for ECE/EEE/Mech/…). `Data Scientist` reaches
@@ -72,19 +72,19 @@ links · 499 career↔skill links**.
 Read-only, no per-user scoping (public reference data). `.server.ts` only
 because they touch the DB. All lazily call `ensureTaxonomySeeded()`.
 
-| Function | Returns |
-|---|---|
-| `getEngineeringCategories()` | categories, ordered, each with a branch count |
-| `getBranches({ categorySlug? })` | branches, optionally scoped to a category |
-| `getSpecializations(categorySlug)` | alias for the scoped call — the "specializations" retrieval |
-| `getTaxonomyTree()` | categories with their branches nested (one call for a grouped picker) |
-| `getBranch(slug)` | one branch + its category + its top 8 careers |
-| `getCareerPaths({ group? })` | all career paths, optional display-group filter |
-| `getCareersForBranch(branchSlug)` | **careers compatible with a branch**, ordered primary → common → possible |
-| `getCareerPath(slug)` | one career + skills grouped by importance + every branch it's reachable from |
-| `getSkills({ category? })` | the skill catalog |
-| `getCareersForSkill(skillSlug)` | careers that require a skill, with importance |
-| `getSkillsForCareers(slugs[])` | union of skill requirements across careers, with a per-skill career count (for later phases) |
+| Function                           | Returns                                                                                      |
+| ---------------------------------- | -------------------------------------------------------------------------------------------- |
+| `getEngineeringCategories()`       | categories, ordered, each with a branch count                                                |
+| `getBranches({ categorySlug? })`   | branches, optionally scoped to a category                                                    |
+| `getSpecializations(categorySlug)` | alias for the scoped call — the "specializations" retrieval                                  |
+| `getTaxonomyTree()`                | categories with their branches nested (one call for a grouped picker)                        |
+| `getBranch(slug)`                  | one branch + its category + its top 8 careers                                                |
+| `getCareerPaths({ group? })`       | all career paths, optional display-group filter                                              |
+| `getCareersForBranch(branchSlug)`  | **careers compatible with a branch**, ordered primary → common → possible                    |
+| `getCareerPath(slug)`              | one career + skills grouped by importance + every branch it's reachable from                 |
+| `getSkills({ category? })`         | the skill catalog                                                                            |
+| `getCareersForSkill(skillSlug)`    | careers that require a skill, with importance                                                |
+| `getSkillsForCareers(slugs[])`     | union of skill requirements across careers, with a per-skill career count (for later phases) |
 
 ## RPC layer — `src/lib/taxonomy-fns.ts`
 
@@ -140,6 +140,6 @@ bun dev   # http://localhost:3000
    does not filter it.
 3. `bun run db:studio` → `branch_career_paths` has ~1029 rows;
    `select count(*) from branch_career_paths bcp join engineering_branches b on
-   b.id = bcp.branch_id join careers c on c.id = bcp.career_id where c.slug =
-   'software-engineer'` → 72 (reachable from every branch).
+b.id = bcp.branch_id join careers c on c.id = bcp.career_id where c.slug =
+'software-engineer'` → 72 (reachable from every branch).
 4. `career_skill_requirements` → ~499 rows; every `skill_id` resolves in `skills`.

@@ -21,9 +21,7 @@ import {
   userPreferences,
   userSkills,
 } from "./db/schema";
-import { confidenceFromMentions, countSkillMentions, extractSkillSlugs } from "./skill-matching";
-import { saveResumeFile } from "./storage";
-import { extractResumeText } from "./text-extraction";
+import { extractSkillSlugs } from "./skill-matching";
 
 /** Which social login buttons the login page should render. No secrets leave the server. */
 export const getEnabledProviders = createServerFn({ method: "GET" }).handler(
@@ -80,105 +78,30 @@ export const updatePreferences = createServerFn({ method: "POST" })
     return { ok: true } as const;
   });
 
-const RESUME_MAX_BYTES = 5 * 1024 * 1024;
-const RESUME_ALLOWED_TYPES = new Set([
-  "application/pdf",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "text/plain",
-]);
-
-/** Shape written to `resumes.structuredData` by `uploadResume` below. */
-type ResumeExtraction = { skills: string[]; textLength: number };
-
-/** Signed-in member's most recently uploaded resume, or null if none / signed out. */
+/**
+ * Signed-in member's most recently uploaded resume (row only — the structured
+ * AI analysis lives in `resume_analyses`, fetched via `getResume` in
+ * resume-fns.ts). Kept here because route guards + the dashboard import it.
+ */
 export const getLatestResume = createServerFn({ method: "GET" }).handler(async () => {
   const session = await auth.api.getSession({ headers: getRequestHeaders() });
   if (!session?.user) return null;
 
   const [row] = await db
-    .select()
+    .select({
+      id: resumes.id,
+      fileName: resumes.fileName,
+      status: resumes.status,
+      createdAt: resumes.createdAt,
+      analyzedAt: resumes.analyzedAt,
+    })
     .from(resumes)
     .where(eq(resumes.userId, session.user.id))
     .orderBy(desc(resumes.createdAt))
     .limit(1);
 
-  if (!row) return null;
-  // Narrowed from the schema's untyped JSON column so the server fn's return type
-  // stays concretely serializable (see ResumeExtraction).
-  return { ...row, structuredData: row.structuredData as ResumeExtraction | null };
+  return row ?? null;
 });
-
-/**
- * Parses an uploaded resume (PDF/DOCX/TXT), stores the file, and scans the extracted
- * text against the skills catalog. Re-uploading replaces the previous resume-derived
- * skill claims — this is meant to reflect the latest resume, not accumulate old ones.
- */
-export const uploadResume = createServerFn({ method: "POST" })
-  .validator((data: unknown) => {
-    if (!(data instanceof FormData)) throw new Error("Expected form data");
-    const file = data.get("file");
-    if (!(file instanceof File)) throw new Error("A resume file is required");
-    return { file };
-  })
-  .handler(async ({ data: { file } }) => {
-    const session = await auth.api.getSession({ headers: getRequestHeaders() });
-    if (!session?.user) throw new Error("Not signed in");
-
-    const isAllowedExt = /\.(pdf|docx|txt)$/i.test(file.name);
-    if (!RESUME_ALLOWED_TYPES.has(file.type) && !isAllowedExt) {
-      throw new Error("Only PDF, DOCX or TXT resumes are supported");
-    }
-    if (file.size > RESUME_MAX_BYTES) {
-      throw new Error("Resume must be 5 MB or smaller");
-    }
-
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    const text = await extractResumeText(file.name, file.type, bytes);
-    const storageKey = await saveResumeFile(session.user.id, file.name, bytes);
-    const mentionCounts = countSkillMentions(text);
-    const skillSlugs = [...mentionCounts.keys()];
-
-    await ensureSkillsSeeded();
-
-    const [resume] = await db
-      .insert(resumes)
-      .values({
-        userId: session.user.id,
-        fileName: file.name,
-        storageKey,
-        mimeType: file.type || "application/octet-stream",
-        sizeBytes: file.size,
-        status: "parsed",
-        structuredData: { skills: skillSlugs, textLength: text.length },
-        parsedAt: new Date(),
-      })
-      .returning();
-
-    // Replace this member's resume-derived skill claims with the fresh extraction.
-    await db
-      .delete(userSkills)
-      .where(and(eq(userSkills.userId, session.user.id), eq(userSkills.source, "resume")));
-
-    if (skillSlugs.length > 0) {
-      const matched = await db
-        .select({ id: skills.id, slug: skills.slug })
-        .from(skills)
-        .where(inArray(skills.slug, skillSlugs));
-
-      if (matched.length > 0) {
-        await db.insert(userSkills).values(
-          matched.map((s) => ({
-            userId: session.user.id,
-            skillId: s.id,
-            confidence: confidenceFromMentions(mentionCounts.get(s.slug) ?? 1),
-            source: "resume" as const,
-          })),
-        );
-      }
-    }
-
-    return { id: resume!.id, fileName: resume!.fileName, skillsDetected: skillSlugs.length };
-  });
 
 /**
  * Signed-in member's skills for the Skills page, merged across sources: resume-derived
