@@ -43,6 +43,20 @@
       "when": 1787848693514,
       "tag": "0005_ancient_puma",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1787852274638,
+      "tag": "0006_greedy_venus",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1787852865604,
+      "tag": "0007_massive_nextwave",
+      "breakpoints": true
     }
   ]
 }

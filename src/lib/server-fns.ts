@@ -22,6 +22,11 @@ import {
   userSkills,
 } from "./db/schema";
 import { extractSkillSlugs } from "./skill-matching";
+import { recordStudentSkill } from "./student-skills.server";
+import { recordActivity } from "./activity.server";
+import { levelFromScore } from "./career-levels";
+import { getPrimaryGoal } from "./career.server";
+import { recomputeSkillGaps } from "./skill-gap-engine.server";
 
 /** Which social login buttons the login page should render. No secrets leave the server. */
 export const getEnabledProviders = createServerFn({ method: "GET" }).handler(
@@ -492,22 +497,15 @@ export const submitAssessment = createServerFn({ method: "POST" })
       .returning();
 
     if (assessmentRow.skillId) {
-      // Replace any previous assessment-sourced claim for this skill with the fresh result.
-      await db
-        .delete(userSkills)
-        .where(
-          and(
-            eq(userSkills.userId, session.user.id),
-            eq(userSkills.skillId, assessmentRow.skillId),
-            eq(userSkills.source, "assessment"),
-          ),
-        );
-      await db.insert(userSkills).values({
-        userId: session.user.id,
+      // A scored assessment is VERIFIED evidence. Routed through the
+      // student-skills service so the level change is written to
+      // user_skill_history and the user_skills row stays consistent.
+      await recordStudentSkill(session.user.id, {
         skillId: assessmentRow.skillId,
-        verifiedLevel,
-        confidence: score,
+        level: levelFromScore(score),
         source: "assessment",
+        score,
+        reason: `Scored ${score}% on ${assessmentRow.name}`,
       });
 
       await db.insert(assessmentResults).values({
@@ -516,6 +514,20 @@ export const submitAssessment = createServerFn({ method: "POST" })
         verifiedLevel,
         confidence: score,
       });
+    }
+
+    await recordActivity(session.user.id, "assessment_completed", {
+      entityType: "assessment",
+      entityId: assessmentRow.id,
+      metadata: { score, name: assessmentRow.name },
+    });
+
+    // Keep skill gaps for the active career goal in sync with the new evidence.
+    try {
+      const goal = await getPrimaryGoal(session.user.id);
+      if (goal) await recomputeSkillGaps(session.user.id, goal.id, goal.careerId);
+    } catch (err) {
+      console.error("[assessment] gap recompute failed", (err as Error).message);
     }
 
     return { score, correct, total: def.questions.length, verifiedLevel };

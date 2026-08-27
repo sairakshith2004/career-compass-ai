@@ -3,6 +3,7 @@ import { drizzle } from "drizzle-orm/libsql";
 
 import * as authSchema from "./auth-schema";
 import * as appSchema from "./schema";
+import * as careerSchema from "./career-schema";
 
 // libSQL: a local file with zero setup in dev (`file:./dev.db`), and the same
 // driver talks to a hosted Turso database in production — just swap DATABASE_URL.
@@ -26,4 +27,6 @@ if (url.startsWith("file:")) {
     });
 }
 
-export const db = drizzle(client, { schema: { ...authSchema, ...appSchema } });
+export const db = drizzle(client, {
+  schema: { ...authSchema, ...appSchema, ...careerSchema },
+});

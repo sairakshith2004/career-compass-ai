@@ -13,6 +13,10 @@ import {
   studentProfiles,
   userSkills,
 } from "./db/schema";
+import { aiRuns, careerRecommendations } from "./db/career-schema";
+import { recordStudentSkill } from "./student-skills.server";
+import { levelFromScore, type Level } from "./career-levels";
+import { recordActivity } from "./activity.server";
 import { ensureSkillsSeeded } from "./db/seed";
 import { ensureTaxonomySeeded } from "./db/seed";
 import { extractResumeText } from "./text-extraction";
@@ -302,24 +306,87 @@ async function persistAnalysis(
     await db.insert(resumeCareerSignals).values(careerRows);
   }
 
-  // Feed matched skills into the shared per-user skill table (source = resume).
-  // These are NOT marked verified — only claimed/supported.
-  await db
-    .delete(userSkills)
-    .where(and(eq(userSkills.userId, userId), eq(userSkills.source, "resume")));
+  // Feed matched skills into the shared per-user skill table via the
+  // student-skills service (source = resume). These are AI-inferred from résumé
+  // text — NEVER marked verified, only claimed / current. Level changes are
+  // recorded to user_skill_history by the service.
   const matched = skillRows.filter((r) => r.skillId);
-  if (matched.length > 0) {
-    const byId = new Map<string, (typeof matched)[number]>();
-    for (const r of matched) if (!byId.has(r.skillId!)) byId.set(r.skillId!, r);
-    await db.insert(userSkills).values(
-      [...byId.values()].map((r) => ({
-        userId,
-        skillId: r.skillId!,
-        confidence: r.confidence,
-        source: "resume" as const,
-      })),
-    );
+  const byId = new Map<string, (typeof matched)[number]>();
+  for (const r of matched) if (!byId.has(r.skillId!)) byId.set(r.skillId!, r);
+  for (const r of byId.values()) {
+    await recordStudentSkill(userId, {
+      skillId: r.skillId!,
+      level: levelFromResumeSignal(r.confidence, r.evidenceStrength),
+      source: "resume",
+      score: r.confidence,
+      reason: "Inferred from résumé analysis",
+      evidence: r.evidence,
+    });
   }
+
+  // Persist AI career recommendations (distinct from the raw resumeCareerSignals
+  // rows — these are the deduped, user-scoped recommendation records).
+  for (const c of careerRows) {
+    await db
+      .insert(careerRecommendations)
+      .values({
+        userId,
+        careerId: c.careerId,
+        careerTitleRaw: c.careerTitleRaw,
+        score: c.score,
+        rationale: c.rationale,
+        source: "resume_analysis",
+        resumeAnalysisId: analysisRow!.id,
+      })
+      .onConflictDoUpdate({
+        target: [
+          careerRecommendations.userId,
+          careerRecommendations.careerTitleRaw,
+          careerRecommendations.source,
+        ],
+        set: {
+          careerId: c.careerId,
+          score: c.score,
+          rationale: c.rationale,
+          resumeAnalysisId: analysisRow!.id,
+          dismissedAt: null,
+          updatedAt: new Date(),
+        },
+      });
+  }
+
+  // Audit the AI run.
+  await db.insert(aiRuns).values({
+    userId,
+    kind: "resume_analysis",
+    model,
+    promptVersion,
+    status: "ok",
+    entityType: "resume_analysis",
+    entityId: analysisRow!.id,
+  });
+
+  await recordActivity(userId, "resume_analyzed", {
+    entityType: "resume_analysis",
+    entityId: analysisRow!.id,
+    metadata: { skills: byId.size, recommendations: careerRows.length },
+  });
+}
+
+/** Map a résumé skill's confidence + evidence strength to a skill level. */
+function levelFromResumeSignal(
+  confidence: number,
+  strength: EvidenceStrengthT | null | undefined,
+): Level {
+  const bump =
+    strength === "work_backed"
+      ? 20
+      : strength === "project_backed"
+        ? 12
+        : strength === "demonstrated"
+          ? 6
+          : 0;
+  return levelFromScore(Math.min(100, confidence + bump));
 }
 
 async function writeKeywordSkillBaseline(userId: string, text: string) {
@@ -331,18 +398,18 @@ async function writeKeywordSkillBaseline(userId: string, text: string) {
       .select({ id: skills.id, slug: skills.slug })
       .from(skills)
       .where(inArray(skills.slug, [...mentions.keys()]));
-    await db
-      .delete(userSkills)
-      .where(and(eq(userSkills.userId, userId), eq(userSkills.source, "resume")));
     if (catalog.length > 0) {
-      await db.insert(userSkills).values(
-        catalog.map((s) => ({
-          userId,
-          skillId: s.id,
-          confidence: 45,
-          source: "resume" as const,
-        })),
-      );
+      await db
+        .insert(userSkills)
+        .values(
+          catalog.map((s) => ({
+            userId,
+            skillId: s.id,
+            confidence: 45,
+            source: "resume" as const,
+          })),
+        )
+        .onConflictDoNothing();
     }
   } catch {
     /* baseline is best-effort */

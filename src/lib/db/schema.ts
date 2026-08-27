@@ -66,6 +66,12 @@ export const careers = sqliteTable("careers", {
   // Display grouping (e.g. "Software", "Data & AI") — not a DB relationship.
   category: text("category").notNull(),
   description: text("description"),
+  // Typical entry point for a new engineering graduate targeting this role.
+  typicalExperienceLevel: text("typical_experience_level", {
+    enum: ["entry", "junior", "mid", "senior"],
+  })
+    .notNull()
+    .default("junior"),
   ...timestamps,
 });
 
@@ -103,6 +109,13 @@ export const careerSkillRequirements = sqliteTable(
       .notNull()
       .references(() => skills.id, { onDelete: "cascade" }),
     importance: text("importance", { enum: ["core", "important", "helpful"] }).notNull(),
+    // Proficiency a candidate for this role is expected to reach — drives the
+    // Skill Gap Engine (Phase 6+). Derived from `importance` at seed time.
+    requiredLevel: text("required_level", {
+      enum: ["beginner", "intermediate", "advanced", "expert"],
+    })
+      .notNull()
+      .default("intermediate"),
     ...timestamps,
   },
   (table) => [
@@ -171,6 +184,20 @@ export const studentProfiles = sqliteTable(
     }),
     careerGoalStatus: text("career_goal_status", {
       enum: ["known", "exploring", "unsure"],
+    }),
+    specialization: text("specialization"),
+    currentSemester: integer("current_semester"),
+    preferredWorkLocation: text("preferred_work_location"),
+    // 0–100, recomputed by profile-completion.server.ts.
+    profileCompletion: integer("profile_completion").notNull().default(0),
+    // AI-detected branch — stored separately from the student's DECLARED
+    // `branchId` and never used to overwrite it (Phase 4/5 principle).
+    detectedBranchId: text("detected_branch_id").references(() => engineeringBranches.id, {
+      onDelete: "set null",
+    }),
+    detectedBranchConfidence: integer("detected_branch_confidence"),
+    branchDetectionSource: text("branch_detection_source", {
+      enum: ["resume_analysis", "assessment", "manual"],
     }),
     // Onboarding progress
     lastCompletedStep: integer("last_completed_step").notNull().default(0),
@@ -441,24 +468,51 @@ export const careerSkillRequirementRelations = relations(careerSkillRequirements
   }),
 }));
 
-export const userSkills = sqliteTable("user_skills", {
-  id: id(),
-  userId: text("user_id")
-    .notNull()
-    .references(() => user.id, { onDelete: "cascade" }),
-  skillId: text("skill_id")
-    .notNull()
-    .references(() => skills.id, { onDelete: "cascade" }),
-  claimedLevel: text("claimed_level", {
-    enum: ["beginner", "intermediate", "advanced", "expert"],
-  }),
-  verifiedLevel: text("verified_level", {
-    enum: ["beginner", "intermediate", "advanced", "expert"],
-  }),
-  confidence: integer("confidence"), // 0-100
-  source: text("source", { enum: ["resume", "assessment", "interview", "manual"] }),
-  ...timestamps,
-});
+export const userSkills = sqliteTable(
+  "user_skills",
+  {
+    id: id(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    skillId: text("skill_id")
+      .notNull()
+      .references(() => skills.id, { onDelete: "cascade" }),
+    claimedLevel: text("claimed_level", {
+      enum: ["beginner", "intermediate", "advanced", "expert"],
+    }),
+    verifiedLevel: text("verified_level", {
+      enum: ["beginner", "intermediate", "advanced", "expert"],
+    }),
+    // The effective current level used by the Skill Gap Engine (max of claimed /
+    // verified, weighted by source — see student-skills.server.ts).
+    currentLevel: text("current_level", {
+      enum: ["beginner", "intermediate", "advanced", "expert"],
+    }),
+    confidence: integer("confidence"), // 0-100
+    score: integer("score"), // 0-100, from assessments / coding practice
+    // Widened in Phase 6. AI inference is kept distinct from verified evidence.
+    source: text("source", {
+      enum: [
+        "resume",
+        "assessment",
+        "project",
+        "course",
+        "coding_practice",
+        "interview",
+        "user_input",
+        "ai_inference",
+      ],
+    }),
+    evidence: text("evidence", { mode: "json" }).$type<{ kind: string; label: string }[]>(),
+    lastAssessedAt: integer("last_assessed_at", { mode: "timestamp" }),
+    ...timestamps,
+  },
+  (t) => [
+    unique("user_skills_user_skill_unique").on(t.userId, t.skillId),
+    index("user_skills_user_idx").on(t.userId),
+  ],
+);
 
 // Jobs page — "Analyze a job description".
 export const jobs = sqliteTable("jobs", {
@@ -472,6 +526,16 @@ export const jobs = sqliteTable("jobs", {
   seniority: text("seniority"),
   location: text("location"),
   remote: integer("remote", { mode: "boolean" }),
+  // Phase 6 job-catalog fields (all nullable — the existing "paste a JD" flow
+  // fills only title/company/rawDescription).
+  employmentType: text("employment_type", {
+    enum: ["full_time", "part_time", "internship", "contract"],
+  }),
+  experienceLevel: text("experience_level"),
+  source: text("source"), // e.g. "user_paste", "seed", "partner_feed"
+  externalRef: text("external_ref"),
+  postedDate: integer("posted_date", { mode: "timestamp" }),
+  closingDate: integer("closing_date", { mode: "timestamp" }),
   status: text("status", { enum: ["pending", "analyzed", "failed"] })
     .notNull()
     .default("pending"),
@@ -498,6 +562,13 @@ export const assessments = sqliteTable("assessments", {
   slug: text("slug").notNull().unique(),
   name: text("name").notNull(),
   type: text("type", { enum: ["mcq", "coding", "written"] }).notNull(),
+  // What the assessment measures (Phase 6 — questions/answers live in
+  // career-schema.ts: assessment_questions / assessment_answers).
+  category: text("category", {
+    enum: ["skill", "career", "coding", "aptitude", "interview"],
+  })
+    .notNull()
+    .default("skill"),
   skillId: text("skill_id").references(() => skills.id, { onDelete: "set null" }),
   durationMinutes: integer("duration_minutes").notNull(),
   description: text("description"),
