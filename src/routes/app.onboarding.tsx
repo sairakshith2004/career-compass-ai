@@ -7,6 +7,7 @@ import { toast } from "sonner";
 
 import { Panel } from "@/components/worklens/Panel";
 import { cn } from "@/lib/utils";
+import { DEGREES } from "@/lib/onboarding-catalog";
 import {
   getOnboarding,
   saveOnboardingStep1,
@@ -215,7 +216,7 @@ function Step1({ state, catalog, goto, afterSave, navigate }: StepProps) {
       saveOnboardingStep1({
         data: {
           fullName: fullName.trim(),
-          degree: (degree || undefined) as never,
+          degree: degree ? DEGREES.find((value) => value === degree) : undefined,
           collegeName: collegeName.trim() || undefined,
           countryCode: countryCode || undefined,
         },
@@ -301,11 +302,17 @@ function Step1({ state, catalog, goto, afterSave, navigate }: StepProps) {
 
 function Step2({ state, catalog, goto, afterSave, navigate }: StepProps) {
   const [branchSlug, setBranchSlug] = useState(state.branchSlug ?? "");
+  const [specialization, setSpecialization] = useState(state.specialization ?? "");
   const [error, setError] = useState<string | null>(null);
 
   const save = useMutation({
     mutationFn: () =>
-      saveOnboardingStep2({ data: { branchSlug: (branchSlug || undefined) as never } }),
+      saveOnboardingStep2({
+        data: {
+          branchSlug: branchSlug || undefined,
+          specialization: specialization.trim() || undefined,
+        },
+      }),
     onSuccess: afterSave,
   });
 
@@ -344,6 +351,14 @@ function Step2({ state, catalog, goto, afterSave, navigate }: StepProps) {
           ))}
         </select>
       </Labeled>
+      <Labeled label="Specialization" hint="optional">
+        <input
+          className={fieldClass}
+          value={specialization}
+          onChange={(e) => setSpecialization(e.target.value)}
+          placeholder="e.g. VLSI, Cloud & DevOps, Structural"
+        />
+      </Labeled>
 
       {error && <p className="text-sm text-destructive">{error}</p>}
 
@@ -369,6 +384,9 @@ function Step2({ state, catalog, goto, afterSave, navigate }: StepProps) {
 
 function Step3({ state, catalog, goto, afterSave, navigate }: StepProps) {
   const [currentYear, setCurrentYear] = useState(state.currentYear ?? "");
+  const [currentSemester, setCurrentSemester] = useState(
+    state.currentSemester ? String(state.currentSemester) : "",
+  );
   const [graduationYear, setGraduationYear] = useState(
     state.graduationYear ? String(state.graduationYear) : "",
   );
@@ -378,7 +396,8 @@ function Step3({ state, catalog, goto, afterSave, navigate }: StepProps) {
     mutationFn: () =>
       saveOnboardingStep3({
         data: {
-          currentYear: (currentYear || undefined) as never,
+          currentYear: currentYear || undefined,
+          currentSemester: currentSemester || undefined,
           graduationYear: graduationYear || undefined,
         },
       }),
@@ -426,6 +445,19 @@ function Step3({ state, catalog, goto, afterSave, navigate }: StepProps) {
           max={thisYear + 8}
         />
       </Labeled>
+      {currentYear && currentYear !== "graduated" && (
+        <Labeled label="Current semester" hint="optional">
+          <input
+            type="number"
+            inputMode="numeric"
+            className={fieldClass}
+            value={currentSemester}
+            onChange={(e) => setCurrentSemester(e.target.value)}
+            min={1}
+            max={catalog.maxSemester}
+          />
+        </Labeled>
+      )}
 
       {error && <p className="text-sm text-destructive">{error}</p>}
 
@@ -453,6 +485,11 @@ function Step4({ state, catalog, goto, afterSave, navigate }: StepProps) {
   const [goalStatus, setGoalStatus] = useState(state.careerGoalStatus ?? "");
   const [experienceLevel, setExperienceLevel] = useState(state.experienceLevel ?? "");
   const [selectedCareers, setSelectedCareers] = useState<string[]>(state.targetCareerSlugs);
+  const [selectedInterests, setSelectedInterests] = useState<string[]>(state.interestAreaSlugs);
+  const [preferredWorkLocation, setPreferredWorkLocation] = useState(
+    state.preferredWorkLocation ?? "",
+  );
+  const [careerNotes, setCareerNotes] = useState(state.careerNotes ?? "");
   const [query, setQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
 
@@ -485,8 +522,11 @@ function Step4({ state, catalog, goto, afterSave, navigate }: StepProps) {
       saveOnboardingStep4({
         data: {
           careerGoalStatus: goalStatus as "known" | "exploring" | "unsure",
-          experienceLevel: (experienceLevel || undefined) as never,
+          experienceLevel: experienceLevel || undefined,
           targetCareerSlugs: showPicker ? selectedCareers : [],
+          interestAreaSlugs: selectedInterests,
+          preferredWorkLocation: preferredWorkLocation.trim() || undefined,
+          careerNotes: careerNotes.trim() || undefined,
         },
       }),
     onSuccess: afterSave,
@@ -603,6 +643,51 @@ function Step4({ state, catalog, goto, afterSave, navigate }: StepProps) {
           ))}
         </select>
       </Labeled>
+      <Labeled label="Career interests" hint="optional">
+        <div className="flex flex-wrap gap-1.5">
+          {catalog.interestAreas.map((area) => {
+            const selected = selectedInterests.includes(area.slug);
+            return (
+              <button
+                key={area.slug}
+                type="button"
+                onClick={() =>
+                  setSelectedInterests((prev) =>
+                    selected
+                      ? prev.filter((slug) => slug !== area.slug)
+                      : [...prev, area.slug].slice(0, 12),
+                  )
+                }
+                className={cn(
+                  "rounded-full border px-2.5 py-1 text-xs transition-colors",
+                  selected
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border hover:border-primary/50",
+                )}
+              >
+                {area.name}
+              </button>
+            );
+          })}
+        </div>
+      </Labeled>
+      <Labeled label="Preferred work location" hint="optional">
+        <input
+          className={fieldClass}
+          value={preferredWorkLocation}
+          onChange={(e) => setPreferredWorkLocation(e.target.value)}
+          placeholder="e.g. Bengaluru, Remote"
+        />
+      </Labeled>
+      <Labeled label="Career notes" hint="optional">
+        <textarea
+          rows={3}
+          className={fieldClass}
+          value={careerNotes}
+          onChange={(e) => setCareerNotes(e.target.value)}
+          placeholder="Anything else WorkLens should know about your direction?"
+        />
+      </Labeled>
 
       {error && <p className="text-sm text-destructive">{error}</p>}
 
@@ -656,6 +741,10 @@ function Step5({ state, catalog, goto, navigate }: StepProps) {
     .map((s) => catalog.careers.find((c) => c.slug === s)?.name)
     .filter(Boolean)
     .join(", ");
+  const interests = state.interestAreaSlugs
+    .map((s) => catalog.interestAreas.find((a) => a.slug === s)?.name)
+    .filter(Boolean)
+    .join(", ");
 
   return (
     <div className="space-y-4">
@@ -663,13 +752,18 @@ function Step5({ state, catalog, goto, navigate }: StepProps) {
         <Row label="Full name" value={state.fullName} />
         <Row label="Degree" value={degree} />
         <Row label="Branch" value={branch} />
+        <Row label="Specialization" value={state.specialization} />
         <Row label="College / university" value={state.collegeName} />
         <Row label="Country" value={country} />
         <Row label="Current year" value={currentYear} />
+        <Row label="Current semester" value={state.currentSemester} />
         <Row label="Graduation year" value={state.graduationYear} />
         <Row label="Experience level" value={experience} />
         <Row label="Career goal" value={goal} />
         <Row label="Target career(s)" value={targetCareers || null} />
+        <Row label="Career interests" value={interests || null} />
+        <Row label="Preferred work location" value={state.preferredWorkLocation} />
+        <Row label="Career notes" value={state.careerNotes} />
       </div>
 
       <p className="text-xs text-muted-foreground">

@@ -10,7 +10,11 @@ const { roadmapTasks } = await import("../src/lib/db/career-schema");
 const PASSWORD = "correct-horse-battery-staple";
 
 async function newUser(email: string): Promise<string> {
-  const { json } = await callAuth(auth, "/sign-up/email", { email, password: PASSWORD, name: email });
+  const { json } = await callAuth(auth, "/sign-up/email", {
+    email,
+    password: PASSWORD,
+    name: email,
+  });
   return json.user.id as string;
 }
 
@@ -22,7 +26,11 @@ beforeAll(async () => {
   alice = await newUser("authz-alice@example.com");
   mallory = await newUser("authz-mallory@example.com");
   await career.setPrimaryCareerGoal(alice, "backend-developer");
-  const [task] = await db.select().from(roadmapTasks).where(eq(roadmapTasks.userId, alice)).limit(1);
+  const [task] = await db
+    .select()
+    .from(roadmapTasks)
+    .where(eq(roadmapTasks.userId, alice))
+    .limit(1);
   aliceTaskId = task!.id;
 });
 

@@ -14,6 +14,8 @@ import {
   saveBranch,
   saveCareerDirection,
   saveGraduation,
+  updateProfileSchema,
+  updateStudentProfile,
   type OnboardingCatalog,
   type OnboardingState,
   type StudentProfileSummary,
@@ -22,10 +24,11 @@ import {
 export type { OnboardingCatalog, OnboardingState, StudentProfileSummary };
 
 /**
- * RPC layer for the onboarding wizard. Each wrapper does exactly two things:
- * resolve the caller from the verified session (`requireUser`), then delegate
- * to the scoped logic in student-profile.server.ts with that user id. The
- * client never supplies a user/profile id.
+ * RPC layer for the onboarding wizard + the dedicated profile editor. Each
+ * wrapper does exactly two things: resolve the caller from the verified session
+ * (`requireUser`), then delegate to the scoped logic in
+ * student-profile.server.ts with that user id. The client never supplies a
+ * user/profile id.
  */
 
 export const getOnboarding = createServerFn({ method: "GET" }).handler(
@@ -34,6 +37,9 @@ export const getOnboarding = createServerFn({ method: "GET" }).handler(
     return { state: await getOnboardingState(id), catalog: onboardingCatalog() };
   },
 );
+
+/** `/app/profile` loads the same state + catalog as onboarding — one source of truth. */
+export const getProfile = getOnboarding;
 
 export const getProfileSummary = createServerFn({ method: "GET" }).handler(
   async (): Promise<StudentProfileSummary | null> => {
@@ -74,3 +80,11 @@ export const finishOnboarding = createServerFn({ method: "POST" }).handler(async
   const { id } = await requireUser();
   return completeOnboarding(id);
 });
+
+/** Full-profile update from the `/app/profile` editor. */
+export const updateProfile = createServerFn({ method: "POST" })
+  .validator(updateProfileSchema)
+  .handler(async ({ data }) => {
+    const { id } = await requireUser();
+    return updateStudentProfile(id, data);
+  });

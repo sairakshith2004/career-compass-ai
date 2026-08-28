@@ -1540,6 +1540,39 @@ export const CAREER_OPTIONS = CAREER_PATHS.map((c) => ({
 
 const CAREER_SLUG_SET = new Set(CAREER_PATHS.map((c) => c.slug));
 
+// --- career interest areas (Phase 2 profile) ----------------------------------
+//
+// "Interest areas" are the broad domains a student is drawn to (e.g. "Data &
+// AI", "Robotics & Automation") — distinct from a concrete *target career*
+// (e.g. "ML Engineer"). They are derived from the `group` on each career path,
+// so adding a career with a new group automatically adds the interest area with
+// no code change here.
+
+const groupSlug = (name: string) =>
+  name
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+export const CAREER_GROUPS: { slug: string; name: string }[] = (() => {
+  const bySlug = new Map<string, string>();
+  for (const c of CAREER_PATHS) {
+    const slug = groupSlug(c.group);
+    if (!bySlug.has(slug)) bySlug.set(slug, c.group);
+  }
+  return [...bySlug].map(([slug, name]) => ({ slug, name }));
+})();
+
+const CAREER_GROUP_SLUG_SET = new Set(CAREER_GROUPS.map((g) => g.slug));
+
+/** True if `v` is a known career-interest-area slug. */
+export const isCareerGroupSlug = (v: string) => CAREER_GROUP_SLUG_SET.has(v);
+
+/** Human-readable name for a career-interest-area slug, or null if unknown. */
+export const careerGroupName = (slug: string): string | null =>
+  CAREER_GROUPS.find((g) => g.slug === slug)?.name ?? null;
+
 // Canonical slug ← (canonical slug | alias). Lets callers pass "ece" or
 // "electronics-communication" interchangeably, and keeps profiles written
 // against Phase 2's shorter slugs resolvable.

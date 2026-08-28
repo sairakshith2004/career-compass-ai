@@ -6,6 +6,7 @@ import {
   ClipboardCheck,
   Route as RouteIcon,
   Settings,
+  GraduationCap,
   type LucideIcon,
 } from "lucide-react";
 
@@ -21,6 +22,7 @@ export type NavItem = {
 /** Single source of truth for navigation — sidebar and mobile drawer share it. */
 export const NAV_ITEMS: NavItem[] = [
   { to: "/app", label: "Dashboard", icon: LayoutDashboard },
+  { to: "/app/onboarding", label: "Profile", icon: GraduationCap },
   { to: "/app/jobs", label: "Jobs", icon: Briefcase, gated: true },
   { to: "/app/resume", label: "Resume", icon: FileText },
   { to: "/app/skills", label: "Skills", icon: Radar, gated: true },

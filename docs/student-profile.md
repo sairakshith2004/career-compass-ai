@@ -17,13 +17,18 @@ picked "I'm not sure yet" is never trapped in a loop.
 
 ## The 5 steps
 
-| Step | Screen                    | Collects                                                   | Required?       |
-| ---- | ------------------------- | ---------------------------------------------------------- | --------------- |
-| 1    | Academic background       | Full name, engineering degree, college/university, country | only full name  |
-| 2    | Engineering branch        | branch                                                     | optional (Skip) |
-| 3    | Current year & graduation | current year, expected graduation year                     | optional (Skip) |
-| 4    | Career direction          | career-goal status, target career(s), experience level     | goal status     |
-| 5    | Review                    | read-only summary → **Complete**                           | —               |
+| Step | Screen                    | Collects                                                                                                  | Required?       |
+| ---- | ------------------------- | ------------------------------------------------------------------------------------------------------- | --------------- |
+| 1    | Academic background       | Full name, engineering degree, college/university, country                                             | only full name  |
+| 2    | Engineering branch        | branch, free-text specialization                                                                       | optional (Skip) |
+| 3    | Current year & graduation | current year, current semester (hidden once "Graduated"), expected graduation year                     | optional (Skip) |
+| 4    | Career direction          | career-goal status, target career(s), career-interest areas, experience level, preferred work location, career notes | goal status     |
+| 5    | Review                    | read-only summary → **Complete**                                                                       | —               |
+
+The `/app/profile` nav item opens this same wizard (it is the profile editor for a
+completed profile). `student_profiles.profile_completion` (0–100) is recomputed by
+`src/lib/profile-completion.ts` (pure) after every write and surfaced on the
+dashboard card.
 
 Every step has **Back**, **Next**, **Skip** (optional steps), and **Save &
 finish later**. Each of those persists the current step server-side before
@@ -59,9 +64,21 @@ Career-goal status drives the picker:
 | `exploring` — "I have a few career options" | multi-select, up to 5                    |
 | `unsure` — "I am not sure yet"              | hidden; any existing targets are cleared |
 
+## Career interests ≠ target career
+
+**Career-interest areas** are the broad domains a student is drawn to (e.g. "Data &
+AI", "Robotics & Automation"). They are the taxonomy's career **groups**, derived
+in `taxonomy-catalog.ts` (`CAREER_GROUPS`) — adding a career with a new group adds
+the interest area with no code change. Stored M:N in `student_interest_areas`,
+replace-all on each save. This is deliberately separate from `student_target_careers`
+(a concrete role like "ML Engineer"): interests are exploratory, targets are chosen.
+
 ## Database
 
-Migration **`0002_certain_stature`**:
+Migration **`0002_certain_stature`** (base) + **`0006_greedy_venus`**
+(`specialization`, `current_semester`, `preferred_work_location`,
+`profile_completion`) + **`0008_charming_gambit`** (`career_notes`,
+`student_interest_areas`):
 
 ### `engineering_branches` / `careers` — reference tables
 
@@ -74,14 +91,23 @@ from `src/lib/onboarding-catalog.ts` (`ensureOnboardingCatalogSeeded`).
 optional questions can be skipped:
 
 `degree`, `branch_id` (FK → `engineering_branches`, `on delete set null`),
-`college_name`, `country_code` (ISO-3166-1 alpha-2), `current_year`
-(enum: first…fifth/graduated), `graduation_year`, `experience_level`
+`specialization` (free text), `college_name`, `country_code` (ISO-3166-1 alpha-2),
+`current_year` (enum: first…fifth/graduated), `current_semester` (int 1–12, forced
+`null` once `current_year = graduated`), `graduation_year`, `experience_level`
 (enum: student/internship/junior/mid/senior), `career_goal_status`
-(enum: known/exploring/unsure), `last_completed_step` (int, default 0, drives
-resume), `onboarding_completed_at` (nullable — flips on step-5 confirm),
+(enum: known/exploring/unsure), `preferred_work_location` (free text, distinct from
+`country_code`), `career_notes` (free text, ≤ 2000 chars), `profile_completion`
+(int 0–100, recomputed on every write), `last_completed_step` (int, default 0,
+drives resume), `onboarding_completed_at` (nullable — flips on step-5 confirm),
 timestamps.
 
 Indexes: `student_profiles_branch_idx`, `student_profiles_country_idx`.
+
+### `student_interest_areas` — M:N student ↔ career-interest area
+
+`id`, `user_id` (FK cascade), `group_slug` (a `CAREER_GROUPS` slug), timestamps.
+`unique(user_id, group_slug)`, index on `user_id`. Replace-all on each step-4 /
+profile save.
 
 ### `student_target_careers` — M:N student ↔ career
 
@@ -103,13 +129,37 @@ on, not worth a join table.
   active-status gate) → delegate with that id. **No wrapper accepts a user id or
   profile id from the caller.** There is no endpoint that can address another
   user's profile.
+  - Retrieval: `getOnboarding` / `getProfile` (state + catalog), `getProfileSummary`.
+  - Creation / update: `saveOnboardingStep1‥4` + `finishOnboarding` (step-wise), and
+    `updateProfile` — a single-call full-profile patch (`updateProfileSchema`) that
+    writes every submitted field, replaces the target-career and interest-area sets,
+    recomputes completion, and never touches onboarding progress.
 - Route protection (`/app/*` `beforeLoad` → `requireAuth`) is treated as UX
   only; the RPCs enforce auth themselves — tested by calling them with no
   session and asserting they reject.
-- All input validated server-side with Zod (`academicBackgroundSchema` etc.);
-  branch/career/country values are checked against the catalog.
+- All input validated server-side with Zod (`academicBackgroundSchema`,
+  `branchSchema`, `graduationSchema`, `careerDirectionSchema`, `updateProfileSchema`);
+  branch / career / country / interest-area values are all checked against the
+  catalog, string lengths and the semester / graduation-year ranges are bounded.
 
-## Tests — `tests/onboarding.test.ts` (13 cases)
+## Tests
+
+### `tests/student-profile.test.ts` (11 cases, Phase 2 extension)
+
+- **catalog:** interest areas are exposed and every slug is a real `CAREER_GROUPS`
+  slug; `maxSemester` is surfaced.
+- **new fields:** specialization / current semester / interests / preferred location
+  / notes round-trip through the step savers; semester is dropped on "Graduated";
+  an unknown interest-area slug is rejected.
+- **`updateStudentProfile`:** writes every field, trims `known` to one target,
+  replaces the interest set, clears fields on omit, and never flips
+  `onboardingCompletedAt`.
+- **completion:** `computeProfileCompletion` is monotonic and ≤ 100; the persisted
+  `profile_completion` column matches the computed value.
+- **ownership:** interest-area rows and summary reads are isolated per user.
+- **auth:** `updateProfile` rejects with no session.
+
+### `tests/onboarding.test.ts` (13 cases)
 
 - **catalog:** branch and career are independent; every career offered
   regardless of branch; no branch→career map exists.

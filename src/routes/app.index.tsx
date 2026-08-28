@@ -76,12 +76,15 @@ function ProfileSummaryCard({
   const facts: [string, string | number | null][] = [
     ["Degree", profile.degree],
     ["Branch", profile.branch],
+    ["Specialization", profile.specialization],
     ["College", profile.collegeName],
     ["Country", profile.country],
     ["Year", profile.currentYear],
+    ["Semester", profile.currentSemester],
     ["Graduation", profile.graduationYear],
     ["Experience", profile.experienceLevel],
     ["Career goal", profile.careerGoalStatus],
+    ["Preferred location", profile.preferredWorkLocation],
   ];
 
   return (
@@ -118,6 +121,18 @@ function ProfileSummaryCard({
               <Badge key={c} tone="primary">
                 {c}
               </Badge>
+            ))}
+          </div>
+        </div>
+      )}
+      {profile.interestAreas.length > 0 && (
+        <div className="mt-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Career interests
+          </p>
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {profile.interestAreas.map((a) => (
+              <Badge key={a}>{a}</Badge>
             ))}
           </div>
         </div>

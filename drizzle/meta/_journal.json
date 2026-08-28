@@ -57,6 +57,13 @@
       "when": 1787852865604,
       "tag": "0007_massive_nextwave",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1787891564102,
+      "tag": "0008_charming_gambit",
+      "breakpoints": true
     }
   ]
 }

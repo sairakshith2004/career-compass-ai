@@ -14,7 +14,11 @@ const { skills } = await import("../src/lib/db/schema");
 const PASSWORD = "correct-horse-battery-staple";
 
 async function newUser(email: string): Promise<string> {
-  const { json } = await callAuth(auth, "/sign-up/email", { email, password: PASSWORD, name: email });
+  const { json } = await callAuth(auth, "/sign-up/email", {
+    email,
+    password: PASSWORD,
+    name: email,
+  });
   return json.user.id as string;
 }
 
@@ -69,9 +73,7 @@ describe("Phase 6 — career journey persists in the database", () => {
     const second = orderedTasks[1]!;
 
     await career.startTask(student, first.id);
-    let dbTask = (
-      await db.select().from(roadmapTasks).where(eq(roadmapTasks.id, first.id))
-    )[0]!;
+    let dbTask = (await db.select().from(roadmapTasks).where(eq(roadmapTasks.id, first.id)))[0]!;
     expect(dbTask.status).toBe("in_progress");
     expect(dbTask.startedAt).not.toBeNull();
 
@@ -83,9 +85,7 @@ describe("Phase 6 — career journey persists in the database", () => {
     expect(dbTask.status).toBe("completed");
     expect(dbTask.completedAt).not.toBeNull();
 
-    const tp = (
-      await db.select().from(taskProgress).where(eq(taskProgress.taskId, first.id))
-    )[0]!;
+    const tp = (await db.select().from(taskProgress).where(eq(taskProgress.taskId, first.id)))[0]!;
     expect(tp.completionPercent).toBe(100);
     expect(tp.timeSpentMinutes).toBe(30);
 
@@ -114,7 +114,9 @@ describe("Phase 6 — career journey persists in the database", () => {
 
   test("an in-progress task is preferred as the current task over a later untouched one", async () => {
     const roadmap = await career.getActiveRoadmap(student);
-    const nextTwo = roadmap!.phases.flatMap((p) => p.tasks).filter((t) => t.status === "not_started");
+    const nextTwo = roadmap!.phases
+      .flatMap((p) => p.tasks)
+      .filter((t) => t.status === "not_started");
     // start the SECOND pending task, not the first
     await career.startTask(student, nextTwo[1]!.id);
 
@@ -144,16 +146,16 @@ describe("Phase 6 — career journey persists in the database", () => {
       const active = await db
         .select()
         .from(careerRoadmaps)
-        .where(
-          and(eq(careerRoadmaps.careerGoalId, g.id), eq(careerRoadmaps.status, "active")),
-        );
+        .where(and(eq(careerRoadmaps.careerGoalId, g.id), eq(careerRoadmaps.status, "active")));
       expect(active.length).toBeLessThanOrEqual(1);
     }
 
     const activity = await db
       .select()
       .from(activityEvents)
-      .where(and(eq(activityEvents.userId, student), eq(activityEvents.type, "career_goal_changed")));
+      .where(
+        and(eq(activityEvents.userId, student), eq(activityEvents.type, "career_goal_changed")),
+      );
     expect(activity.length).toBeGreaterThan(0);
   });
 
@@ -182,6 +184,8 @@ describe("Phase 6 — career journey persists in the database", () => {
     expect(resolved.severity).toBe("none");
 
     const history = await skillsSvc.getSkillHistory(student);
-    expect(history.some((h) => h.skillId === target!.skillId && h.newLevel === "expert")).toBe(true);
+    expect(history.some((h) => h.skillId === target!.skillId && h.newLevel === "expert")).toBe(
+      true,
+    );
   });
 });

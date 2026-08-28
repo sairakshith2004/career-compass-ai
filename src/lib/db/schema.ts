@@ -185,9 +185,17 @@ export const studentProfiles = sqliteTable(
     careerGoalStatus: text("career_goal_status", {
       enum: ["known", "exploring", "unsure"],
     }),
+    // Step 1/2 — free-text specialization within the branch (e.g. "VLSI",
+    // "Cloud & DevOps", "Structural"). Kept as text, not a catalog — it varies
+    // too much between colleges to enumerate usefully.
     specialization: text("specialization"),
+    // Step 3 — current semester (1–12), only meaningful while still studying.
     currentSemester: integer("current_semester"),
+    // Step 4 — where the student wants to work (city / region / "Remote").
+    // Distinct from `country_code`, which is where they study.
     preferredWorkLocation: text("preferred_work_location"),
+    // Step 4 — any other non-sensitive career context the student wants to add.
+    careerNotes: text("career_notes"),
     // 0–100, recomputed by profile-completion.server.ts.
     profileCompletion: integer("profile_completion").notNull().default(0),
     // AI-detected branch — stored separately from the student's DECLARED
@@ -231,6 +239,26 @@ export const studentTargetCareers = sqliteTable(
   ],
 );
 
+// The student's broad career-interest areas (taxonomy career groups — e.g.
+// "Data & AI", "Robotics & Automation"). Many-to-many, kept separate from
+// `student_target_careers`: interests are exploratory, targets are concrete.
+export const studentInterestAreas = sqliteTable(
+  "student_interest_areas",
+  {
+    id: id(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    // Slug of a taxonomy career group (see `CAREER_GROUPS` in taxonomy-catalog.ts).
+    groupSlug: text("group_slug").notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    unique("student_interest_areas_user_group_unique").on(table.userId, table.groupSlug),
+    index("student_interest_areas_user_idx").on(table.userId),
+  ],
+);
+
 export const studentProfileRelations = relations(studentProfiles, ({ one, many }) => ({
   user: one(user, { fields: [studentProfiles.userId], references: [user.id] }),
   branch: one(engineeringBranches, {
@@ -238,6 +266,14 @@ export const studentProfileRelations = relations(studentProfiles, ({ one, many }
     references: [engineeringBranches.id],
   }),
   targetCareers: many(studentTargetCareers),
+  interestAreas: many(studentInterestAreas),
+}));
+
+export const studentInterestAreaRelations = relations(studentInterestAreas, ({ one }) => ({
+  profile: one(studentProfiles, {
+    fields: [studentInterestAreas.userId],
+    references: [studentProfiles.userId],
+  }),
 }));
 
 export const studentTargetCareerRelations = relations(studentTargetCareers, ({ one }) => ({
