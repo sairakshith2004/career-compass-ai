@@ -22,6 +22,8 @@ import { ensureTaxonomySeeded } from "./db/seed";
 import { extractResumeText } from "./text-extraction";
 import {
   analyzeResumeText,
+  fallbackAnalyzeResumeText,
+  isAIConfigured,
   ResumeAIError,
   type ResumeAnalysis,
   type EducationEntryT,
@@ -53,6 +55,7 @@ function resumeLog(
     | "analysis_started"
     | "analysis_completed"
     | "analysis_failed"
+    | "analysis_fallback"
     | "resume_deleted",
   meta: Record<string, string | number | boolean | null | undefined>,
 ) {
@@ -225,7 +228,18 @@ export async function runResumeAnalysis(
 
   let result;
   try {
-    result = await analyzeResumeText(text, deps);
+    // Use injected parse (tests) or AI if configured; fall back to keyword detection.
+    if (deps.parse || isAIConfigured()) {
+      result = await analyzeResumeText(text, deps);
+    } else {
+      resumeLog("analysis_fallback", {
+        userId,
+        resumeId,
+        reason: "no_ai_key",
+        textChars: text.length,
+      });
+      result = fallbackAnalyzeResumeText(text);
+    }
   } catch (err) {
     const code = err instanceof ResumeAIError ? err.code : "unknown";
     const userMessage =

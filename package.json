@@ -59,6 +59,7 @@
     "embla-carousel-react": "^8.6.0",
     "hash-wasm": "^4.12.0",
     "input-otp": "^1.4.2",
+    "install": "^0.13.0",
     "lucide-react": "^0.575.0",
     "mammoth": "^1.12.1",
     "pdf-parse": "^2.4.5",

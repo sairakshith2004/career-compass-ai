@@ -16,16 +16,16 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as AppIndexRouteImport } from './routes/app.index'
+import { Route as AppApplicationsRouteImport } from './routes/app.applications'
 import { Route as AppAssessmentsRouteImport } from './routes/app.assessments'
 import { Route as AppCareerRouteImport } from './routes/app.career'
 import { Route as AppJobsRouteImport } from './routes/app.jobs'
 import { Route as AppOnboardingRouteImport } from './routes/app.onboarding'
+import { Route as AppProjectsRouteImport } from './routes/app.projects'
 import { Route as AppResumeRouteImport } from './routes/app.resume'
 import { Route as AppRoadmapRouteImport } from './routes/app.roadmap'
 import { Route as AppSettingsRouteImport } from './routes/app.settings'
 import { Route as AppSkillsRouteImport } from './routes/app.skills'
-import { Route as AppProjectsRouteImport } from './routes/app.projects'
-import { Route as AppApplicationsRouteImport } from './routes/app.applications'
 import { Route as ApiAuthSplatRouteImport } from './routes/api.auth.$'
 
 const IndexRoute = IndexRouteImport.update({
@@ -63,6 +63,11 @@ const AppIndexRoute = AppIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppRoute,
 } as any)
+const AppApplicationsRoute = AppApplicationsRouteImport.update({
+  id: '/applications',
+  path: '/applications',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppAssessmentsRoute = AppAssessmentsRouteImport.update({
   id: '/assessments',
   path: '/assessments',
@@ -81,6 +86,11 @@ const AppJobsRoute = AppJobsRouteImport.update({
 const AppOnboardingRoute = AppOnboardingRouteImport.update({
   id: '/onboarding',
   path: '/onboarding',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppProjectsRoute = AppProjectsRouteImport.update({
+  id: '/projects',
+  path: '/projects',
   getParentRoute: () => AppRoute,
 } as any)
 const AppResumeRoute = AppResumeRouteImport.update({
@@ -103,16 +113,6 @@ const AppSkillsRoute = AppSkillsRouteImport.update({
   path: '/skills',
   getParentRoute: () => AppRoute,
 } as any)
-const AppProjectsRoute = AppProjectsRouteImport.update({
-  id: '/projects',
-  path: '/projects',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppApplicationsRoute = AppApplicationsRouteImport.update({
-  id: '/applications',
-  path: '/applications',
-  getParentRoute: () => AppRoute,
-} as any)
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   id: '/api/auth/$',
   path: '/api/auth/$',
@@ -126,16 +126,16 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
+  '/app/applications': typeof AppApplicationsRoute
   '/app/assessments': typeof AppAssessmentsRoute
   '/app/career': typeof AppCareerRoute
   '/app/jobs': typeof AppJobsRoute
   '/app/onboarding': typeof AppOnboardingRoute
+  '/app/projects': typeof AppProjectsRoute
   '/app/resume': typeof AppResumeRoute
   '/app/roadmap': typeof AppRoadmapRoute
   '/app/settings': typeof AppSettingsRoute
   '/app/skills': typeof AppSkillsRoute
-  '/app/projects': typeof AppProjectsRoute
-  '/app/applications': typeof AppApplicationsRoute
   '/app/': typeof AppIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
@@ -145,16 +145,16 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
+  '/app/applications': typeof AppApplicationsRoute
   '/app/assessments': typeof AppAssessmentsRoute
   '/app/career': typeof AppCareerRoute
   '/app/jobs': typeof AppJobsRoute
   '/app/onboarding': typeof AppOnboardingRoute
+  '/app/projects': typeof AppProjectsRoute
   '/app/resume': typeof AppResumeRoute
   '/app/roadmap': typeof AppRoadmapRoute
   '/app/settings': typeof AppSettingsRoute
   '/app/skills': typeof AppSkillsRoute
-  '/app/projects': typeof AppProjectsRoute
-  '/app/applications': typeof AppApplicationsRoute
   '/app': typeof AppIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
@@ -166,16 +166,16 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
+  '/app/applications': typeof AppApplicationsRoute
   '/app/assessments': typeof AppAssessmentsRoute
   '/app/career': typeof AppCareerRoute
   '/app/jobs': typeof AppJobsRoute
   '/app/onboarding': typeof AppOnboardingRoute
+  '/app/projects': typeof AppProjectsRoute
   '/app/resume': typeof AppResumeRoute
   '/app/roadmap': typeof AppRoadmapRoute
   '/app/settings': typeof AppSettingsRoute
   '/app/skills': typeof AppSkillsRoute
-  '/app/projects': typeof AppProjectsRoute
-  '/app/applications': typeof AppApplicationsRoute
   '/app/': typeof AppIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
@@ -188,16 +188,16 @@ export interface FileRouteTypes {
     | '/login'
     | '/reset-password'
     | '/signup'
+    | '/app/applications'
     | '/app/assessments'
     | '/app/career'
     | '/app/jobs'
     | '/app/onboarding'
+    | '/app/projects'
     | '/app/resume'
     | '/app/roadmap'
     | '/app/settings'
     | '/app/skills'
-    | '/app/projects'
-    | '/app/applications'
     | '/app/'
     | '/api/auth/$'
   fileRoutesByTo: FileRoutesByTo
@@ -207,16 +207,16 @@ export interface FileRouteTypes {
     | '/login'
     | '/reset-password'
     | '/signup'
+    | '/app/applications'
     | '/app/assessments'
     | '/app/career'
     | '/app/jobs'
     | '/app/onboarding'
+    | '/app/projects'
     | '/app/resume'
     | '/app/roadmap'
     | '/app/settings'
     | '/app/skills'
-    | '/app/projects'
-    | '/app/applications'
     | '/app'
     | '/api/auth/$'
   id:
@@ -227,16 +227,16 @@ export interface FileRouteTypes {
     | '/login'
     | '/reset-password'
     | '/signup'
+    | '/app/applications'
     | '/app/assessments'
     | '/app/career'
     | '/app/jobs'
     | '/app/onboarding'
+    | '/app/projects'
     | '/app/resume'
     | '/app/roadmap'
     | '/app/settings'
     | '/app/skills'
-    | '/app/projects'
-    | '/app/applications'
     | '/app/'
     | '/api/auth/$'
   fileRoutesById: FileRoutesById
@@ -302,6 +302,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppIndexRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/applications': {
+      id: '/app/applications'
+      path: '/applications'
+      fullPath: '/app/applications'
+      preLoaderRoute: typeof AppApplicationsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/assessments': {
       id: '/app/assessments'
       path: '/assessments'
@@ -328,6 +335,13 @@ declare module '@tanstack/react-router' {
       path: '/onboarding'
       fullPath: '/app/onboarding'
       preLoaderRoute: typeof AppOnboardingRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/projects': {
+      id: '/app/projects'
+      path: '/projects'
+      fullPath: '/app/projects'
+      preLoaderRoute: typeof AppProjectsRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/resume': {
@@ -358,20 +372,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSkillsRouteImport
       parentRoute: typeof AppRoute
     }
-    '/app/projects': {
-      id: '/app/projects'
-      path: '/projects'
-      fullPath: '/app/projects'
-      preLoaderRoute: typeof AppProjectsRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/app/applications': {
-      id: '/app/applications'
-      path: '/applications'
-      fullPath: '/app/applications'
-      preLoaderRoute: typeof AppApplicationsRouteImport
-      parentRoute: typeof AppRoute
-    }
     '/api/auth/$': {
       id: '/api/auth/$'
       path: '/api/auth/$'
@@ -383,30 +383,30 @@ declare module '@tanstack/react-router' {
 }
 
 interface AppRouteChildren {
+  AppApplicationsRoute: typeof AppApplicationsRoute
   AppAssessmentsRoute: typeof AppAssessmentsRoute
   AppCareerRoute: typeof AppCareerRoute
   AppJobsRoute: typeof AppJobsRoute
   AppOnboardingRoute: typeof AppOnboardingRoute
+  AppProjectsRoute: typeof AppProjectsRoute
   AppResumeRoute: typeof AppResumeRoute
   AppRoadmapRoute: typeof AppRoadmapRoute
   AppSettingsRoute: typeof AppSettingsRoute
   AppSkillsRoute: typeof AppSkillsRoute
-  AppProjectsRoute: typeof AppProjectsRoute
-  AppApplicationsRoute: typeof AppApplicationsRoute
   AppIndexRoute: typeof AppIndexRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppApplicationsRoute: AppApplicationsRoute,
   AppAssessmentsRoute: AppAssessmentsRoute,
   AppCareerRoute: AppCareerRoute,
   AppJobsRoute: AppJobsRoute,
   AppOnboardingRoute: AppOnboardingRoute,
+  AppProjectsRoute: AppProjectsRoute,
   AppResumeRoute: AppResumeRoute,
   AppRoadmapRoute: AppRoadmapRoute,
   AppSettingsRoute: AppSettingsRoute,
   AppSkillsRoute: AppSkillsRoute,
-  AppProjectsRoute: AppProjectsRoute,
-  AppApplicationsRoute: AppApplicationsRoute,
   AppIndexRoute: AppIndexRoute,
 }
 

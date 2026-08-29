@@ -472,3 +472,171 @@ export async function analyzeResumeText(
 
   return { analysis: validated.data, model, promptVersion: RESUME_ANALYSIS_PROMPT_VERSION, usage };
 }
+
+// --- keyword fallback (no AI required) --------------------------------------
+
+import { countSkillMentions, confidenceFromMentions } from "./skill-matching";
+import { SKILLS_CATALOG } from "./skills-catalog";
+
+const SKILL_CATEGORY_MAP: Record<string, DetectedSkillT["category"]> = {};
+for (const s of SKILLS_CATALOG) {
+  SKILL_CATEGORY_MAP[s.slug] = (
+    {
+      Language: "language",
+      Frontend: "framework",
+      Backend: "framework",
+      "Data/ML": "ai_ml",
+      Database: "database",
+      Cloud: "cloud",
+      Concept: "concept",
+      Tools: "tool",
+      Security: "cybersecurity",
+      Embedded: "language",
+      Electronics: "language",
+      Electrical: "concept",
+      Mechanical: "tool",
+      Robotics: "tool",
+      Automotive: "concept",
+      Aerospace: "concept",
+      Civil: "concept",
+      Chemical: "concept",
+      "Biotechnology": "concept",
+      "Biomedical": "concept",
+      "Environmental": "concept",
+      "Materials": "concept",
+      "Petroleum": "concept",
+      "Instrumentation": "tool",
+      "Emerging Tech": "concept",
+      "Professional": "concept",
+      "Engineering Tools": "tool",
+    }[s.category] ?? "other"
+  ) as DetectedSkillT["category"];
+}
+
+/** Check if the AI provider is actually configured with a usable key. */
+export function isAIConfigured(): boolean {
+  const key = process.env["ANTHROPIC_API_KEY"];
+  if (!key && !process.env["ANTHROPIC_AUTH_TOKEN"]) return false;
+  if (key && !key.startsWith("sk-ant-")) return false;
+  return true;
+}
+
+/**
+ * Keyword-based fallback analysis when no AI provider is configured.
+ * Returns a valid ResumeAnalysis object using skill keyword detection only.
+ * No projects, experience, or education extraction — those require AI.
+ */
+export function fallbackAnalyzeResumeText(rawText: string): AnalyzeResult {
+  const text = rawText.trim().slice(0, MAX_RESUME_CHARS);
+  if (text.length < 40) {
+    throw new ResumeAIError("empty_text", USER_MESSAGES.empty_text);
+  }
+
+  const mentions = countSkillMentions(text);
+  const detectedSkills: DetectedSkillT[] = [];
+  const skillCategories = {
+    programmingLanguages: [] as string[],
+    frameworks: [] as string[],
+    libraries: [] as string[],
+    databases: [] as string[],
+    cloudTechnologies: [] as string[],
+    devopsTools: [] as string[],
+    aiMlSkills: [] as string[],
+    cybersecuritySkills: [] as string[],
+    softwareEngineeringSkills: [] as string[],
+    tools: [] as string[],
+  };
+
+  for (const [slug, count] of mentions) {
+    const catalogSkill = SKILLS_CATALOG.find((s) => s.slug === slug);
+    if (!catalogSkill) continue;
+    const confidence = confidenceFromMentions(count);
+    const category = SKILL_CATEGORY_MAP[slug] ?? "other";
+    detectedSkills.push({
+      name: catalogSkill.name,
+      category,
+      evidenceStrength: count >= 3 ? "demonstrated" : count >= 2 ? "project_backed" : "mentioned",
+      confidence,
+      evidence: [{ kind: "resume_mention", label: `Mentioned ${count} time${count > 1 ? "s" : ""} in resume` }],
+    });
+
+    // Categorize for flat lists
+    const catName = catalogSkill.category;
+    if (catName === "Language") skillCategories.programmingLanguages.push(catalogSkill.name);
+    else if (catName === "Frontend") skillCategories.frameworks.push(catalogSkill.name);
+    else if (catName === "Backend") skillCategories.frameworks.push(catalogSkill.name);
+    else if (catName === "Data/ML") skillCategories.aiMlSkills.push(catalogSkill.name);
+    else if (catName === "Database") skillCategories.databases.push(catalogSkill.name);
+    else if (catName === "Cloud") skillCategories.cloudTechnologies.push(catalogSkill.name);
+    else if (catName === "Security") skillCategories.cybersecuritySkills.push(catalogSkill.name);
+    else if (catName === "Concept") skillCategories.softwareEngineeringSkills.push(catalogSkill.name);
+    else if (catName === "Tools") skillCategories.tools.push(catalogSkill.name);
+    else skillCategories.tools.push(catalogSkill.name);
+  }
+
+  const totalSkills = detectedSkills.length;
+  const highConfSkills = detectedSkills.filter((s) => s.confidence >= 70).length;
+
+  // Determine readiness based on skill count and evidence strength
+  let readinessLevel: "early" | "developing" | "approaching" | "job_ready" = "early";
+  if (highConfSkills >= 8) readinessLevel = "job_ready";
+  else if (highConfSkills >= 5) readinessLevel = "approaching";
+  else if (totalSkills >= 3) readinessLevel = "developing";
+
+  const analysis: ResumeAnalysis = {
+    candidateName: null,
+    summary: `Keyword-based analysis detected ${totalSkills} skill${totalSkills !== 1 ? "s" : ""} from your resume. For a deeper analysis including projects, experience, and education extraction, configure an ANTHROPIC_API_KEY.`,
+    education: [],
+    academic: {
+      detectedDegree: null,
+      detectedBranch: null,
+      detectedBranchConfidence: 0,
+      detectedBranchUncertain: true,
+      branchEvidence: [],
+      detectedSpecialization: null,
+      detectedSpecializationConfidence: 0,
+      detectedCollege: null,
+      detectedGraduationYear: null,
+    },
+    experienceLevel: "student",
+    experienceLevelConfidence: 30,
+    skills: detectedSkills,
+    skillCategories,
+    softSkills: [],
+    projects: [],
+    projectDomains: [],
+    internships: [],
+    workExperience: [],
+    certifications: [],
+    achievements: [],
+    strengths: detectedSkills
+      .filter((s) => s.confidence >= 60)
+      .map((s) => s.name)
+      .slice(0, 5),
+    weaknesses: [],
+    missingSkills: [],
+    careerInterests: [],
+    recommendedJobRoles: [],
+    jobReadiness: {
+      level: readinessLevel,
+      rationale: `Based on ${totalSkills} detected skill${totalSkills !== 1 ? "s" : ""} (${highConfSkills} with strong evidence).`,
+      evidence: detectedSkills
+        .filter((s) => s.confidence >= 50)
+        .map((s) => `${s.name} (confidence: ${s.confidence}%)`)
+        .slice(0, 5),
+    },
+  };
+
+  console.info("[resume-ai] fallback keyword analysis", {
+    chars: text.length,
+    skillsDetected: totalSkills,
+    model: "keyword-fallback",
+  });
+
+  return {
+    analysis,
+    model: "keyword-fallback",
+    promptVersion: "keyword-fallback-v1",
+    usage: null,
+  };
+}
