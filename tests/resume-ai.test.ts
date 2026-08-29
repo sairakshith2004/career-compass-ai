@@ -22,6 +22,14 @@ describe("analyzeResumeText", () => {
     ).rejects.toMatchObject({ code: "malformed" });
   });
 
+  test("a malformed parser envelope is converted to a typed AI error", async () => {
+    await expect(
+      analyzeResumeText(SAMPLE_RESUME_TEXT, {
+        parse: async () => undefined as never,
+      }),
+    ).rejects.toMatchObject({ code: "malformed" });
+  });
+
   test("AI refusal → ResumeAIError 'refused'", async () => {
     await expect(
       analyzeResumeText(SAMPLE_RESUME_TEXT, {

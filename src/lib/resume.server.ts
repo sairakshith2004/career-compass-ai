@@ -240,7 +240,37 @@ export async function runResumeAnalysis(
     throw err;
   }
 
-  await persistAnalysis(userId, resume.id, result.analysis, result.model, result.promptVersion);
+  try {
+    await persistAnalysis(userId, resume.id, result.analysis, result.model, result.promptVersion);
+    await db
+      .update(resumes)
+      .set({
+        status: "complete",
+        analysisModel: result.model,
+        analyzedAt: new Date(),
+        errorMessage: null,
+      })
+      .where(eq(resumes.id, resumeId));
+  } catch (err) {
+    await db
+      .update(resumes)
+      .set({
+        status: "failed",
+        errorMessage: "The analysis could not be saved. Please try again.",
+      })
+      .where(eq(resumes.id, resumeId));
+    resumeLog("analysis_failed", {
+      userId,
+      resumeId,
+      code: "persistence",
+      durationMs: Date.now() - startedAt,
+    });
+    throw new ResumeAIError(
+      "provider_error",
+      "The analysis could not be saved. Please try again.",
+      err,
+    );
+  }
   resumeLog("analysis_completed", {
     userId,
     resumeId,
@@ -248,16 +278,6 @@ export async function runResumeAnalysis(
     model: result.model,
     durationMs: Date.now() - startedAt,
   });
-
-  await db
-    .update(resumes)
-    .set({
-      status: "complete",
-      analysisModel: result.model,
-      analyzedAt: new Date(),
-      errorMessage: null,
-    })
-    .where(eq(resumes.id, resumeId));
 
   return { status: "complete" };
 }
