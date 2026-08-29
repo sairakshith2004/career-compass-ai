@@ -24,6 +24,8 @@ import { Route as AppResumeRouteImport } from './routes/app.resume'
 import { Route as AppRoadmapRouteImport } from './routes/app.roadmap'
 import { Route as AppSettingsRouteImport } from './routes/app.settings'
 import { Route as AppSkillsRouteImport } from './routes/app.skills'
+import { Route as AppProjectsRouteImport } from './routes/app.projects'
+import { Route as AppApplicationsRouteImport } from './routes/app.applications'
 import { Route as ApiAuthSplatRouteImport } from './routes/api.auth.$'
 
 const IndexRoute = IndexRouteImport.update({
@@ -101,6 +103,16 @@ const AppSkillsRoute = AppSkillsRouteImport.update({
   path: '/skills',
   getParentRoute: () => AppRoute,
 } as any)
+const AppProjectsRoute = AppProjectsRouteImport.update({
+  id: '/projects',
+  path: '/projects',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppApplicationsRoute = AppApplicationsRouteImport.update({
+  id: '/applications',
+  path: '/applications',
+  getParentRoute: () => AppRoute,
+} as any)
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   id: '/api/auth/$',
   path: '/api/auth/$',
@@ -122,6 +134,8 @@ export interface FileRoutesByFullPath {
   '/app/roadmap': typeof AppRoadmapRoute
   '/app/settings': typeof AppSettingsRoute
   '/app/skills': typeof AppSkillsRoute
+  '/app/projects': typeof AppProjectsRoute
+  '/app/applications': typeof AppApplicationsRoute
   '/app/': typeof AppIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
@@ -139,6 +153,8 @@ export interface FileRoutesByTo {
   '/app/roadmap': typeof AppRoadmapRoute
   '/app/settings': typeof AppSettingsRoute
   '/app/skills': typeof AppSkillsRoute
+  '/app/projects': typeof AppProjectsRoute
+  '/app/applications': typeof AppApplicationsRoute
   '/app': typeof AppIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
@@ -158,6 +174,8 @@ export interface FileRoutesById {
   '/app/roadmap': typeof AppRoadmapRoute
   '/app/settings': typeof AppSettingsRoute
   '/app/skills': typeof AppSkillsRoute
+  '/app/projects': typeof AppProjectsRoute
+  '/app/applications': typeof AppApplicationsRoute
   '/app/': typeof AppIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
@@ -178,6 +196,8 @@ export interface FileRouteTypes {
     | '/app/roadmap'
     | '/app/settings'
     | '/app/skills'
+    | '/app/projects'
+    | '/app/applications'
     | '/app/'
     | '/api/auth/$'
   fileRoutesByTo: FileRoutesByTo
@@ -195,6 +215,8 @@ export interface FileRouteTypes {
     | '/app/roadmap'
     | '/app/settings'
     | '/app/skills'
+    | '/app/projects'
+    | '/app/applications'
     | '/app'
     | '/api/auth/$'
   id:
@@ -213,6 +235,8 @@ export interface FileRouteTypes {
     | '/app/roadmap'
     | '/app/settings'
     | '/app/skills'
+    | '/app/projects'
+    | '/app/applications'
     | '/app/'
     | '/api/auth/$'
   fileRoutesById: FileRoutesById
@@ -334,6 +358,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSkillsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/projects': {
+      id: '/app/projects'
+      path: '/projects'
+      fullPath: '/app/projects'
+      preLoaderRoute: typeof AppProjectsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/applications': {
+      id: '/app/applications'
+      path: '/applications'
+      fullPath: '/app/applications'
+      preLoaderRoute: typeof AppApplicationsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/api/auth/$': {
       id: '/api/auth/$'
       path: '/api/auth/$'
@@ -353,6 +391,8 @@ interface AppRouteChildren {
   AppRoadmapRoute: typeof AppRoadmapRoute
   AppSettingsRoute: typeof AppSettingsRoute
   AppSkillsRoute: typeof AppSkillsRoute
+  AppProjectsRoute: typeof AppProjectsRoute
+  AppApplicationsRoute: typeof AppApplicationsRoute
   AppIndexRoute: typeof AppIndexRoute
 }
 
@@ -365,6 +405,8 @@ const AppRouteChildren: AppRouteChildren = {
   AppRoadmapRoute: AppRoadmapRoute,
   AppSettingsRoute: AppSettingsRoute,
   AppSkillsRoute: AppSkillsRoute,
+  AppProjectsRoute: AppProjectsRoute,
+  AppApplicationsRoute: AppApplicationsRoute,
   AppIndexRoute: AppIndexRoute,
 }
 

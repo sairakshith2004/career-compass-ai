@@ -181,6 +181,202 @@ export const ASSESSMENTS_CATALOG: AssessmentDef[] = [
       },
     ],
   },
+  {
+    slug: "javascript-fundamentals",
+    name: "JavaScript Fundamentals",
+    skillSlug: "javascript",
+    type: "mcq",
+    durationMinutes: 10,
+    description: "Closures, promises, and core JS behavior.",
+    questions: [
+      {
+        id: "js-1",
+        prompt: "What is the output of `typeof null` in JavaScript?",
+        options: ["null", "undefined", "object", "boolean"],
+        correctIndex: 2,
+      },
+      {
+        id: "js-2",
+        prompt: "Which method creates a new array with elements that pass a test?",
+        options: ["map", "filter", "reduce", "forEach"],
+        correctIndex: 1,
+      },
+      {
+        id: "js-3",
+        prompt: "What does the `===` operator check?",
+        options: [
+          "Value equality only",
+          "Value and type equality",
+          "Reference equality only",
+          "None of the above",
+        ],
+        correctIndex: 1,
+      },
+      {
+        id: "js-4",
+        prompt: "What is a closure in JavaScript?",
+        options: [
+          "A function that returns undefined",
+          "A function that has access to its outer scope's variables",
+          "A way to close browser windows",
+          "A loop termination statement",
+        ],
+        correctIndex: 1,
+      },
+    ],
+  },
+  {
+    slug: "react-fundamentals",
+    name: "React Fundamentals",
+    skillSlug: "react",
+    type: "mcq",
+    durationMinutes: 10,
+    description: "Components, hooks, and the React rendering model.",
+    questions: [
+      {
+        id: "react-1",
+        prompt: "What hook is used for side effects in functional components?",
+        options: ["useState", "useEffect", "useContext", "useReducer"],
+        correctIndex: 1,
+      },
+      {
+        id: "react-2",
+        prompt: "What should a React component return?",
+        options: [
+          "HTML strings",
+          "React elements (JSX)",
+          "DOM nodes directly",
+          "CSS styles",
+        ],
+        correctIndex: 1,
+      },
+      {
+        id: "react-3",
+        prompt: "Why are keys important in React lists?",
+        options: [
+          "For styling",
+          "To help React identify which items changed",
+          "For accessibility",
+          "They are not important",
+        ],
+        correctIndex: 1,
+      },
+      {
+        id: "react-4",
+        prompt: "What is prop drilling?",
+        options: [
+          "Passing props through many component layers",
+          "Creating new props dynamically",
+          "Using context instead of props",
+          "A testing technique",
+        ],
+        correctIndex: 0,
+      },
+    ],
+  },
+  {
+    slug: "git-fundamentals",
+    name: "Git Fundamentals",
+    skillSlug: "git",
+    type: "mcq",
+    durationMinutes: 8,
+    description: "Branching, merging, and version control workflows.",
+    questions: [
+      {
+        id: "git-1",
+        prompt: "What does `git stash` do?",
+        options: [
+          "Deletes uncommitted changes",
+          "Temporarily saves uncommitted changes",
+          "Merges all branches",
+          "Creates a new branch",
+        ],
+        correctIndex: 1,
+      },
+      {
+        id: "git-2",
+        prompt: "What's the difference between `git merge` and `git rebase`?",
+        options: [
+          "They are identical",
+          "Rebase rewrites commit history; merge creates a merge commit",
+          "Merge is faster",
+          "Rebase creates merge commits",
+        ],
+        correctIndex: 1,
+      },
+      {
+        id: "git-3",
+        prompt: "What does `git reset --hard HEAD~1` do?",
+        options: [
+          "Undoes the last commit and discards changes",
+          "Creates a new branch",
+          "Pushes to remote",
+          "Shows the diff",
+        ],
+        correctIndex: 0,
+      },
+      {
+        id: "git-4",
+        prompt: "What is a pull request?",
+        options: [
+          "A request to delete a branch",
+          "A proposal to merge changes from one branch into another",
+          "A way to pull files from the internet",
+          "A git command to fetch data",
+        ],
+        correctIndex: 1,
+      },
+    ],
+  },
+  {
+    slug: "rest-api-basics",
+    name: "REST API Design",
+    skillSlug: "rest-apis",
+    type: "mcq",
+    durationMinutes: 10,
+    description: "HTTP methods, status codes, and RESTful design principles.",
+    questions: [
+      {
+        id: "rest-1",
+        prompt: "Which HTTP method is used to create a new resource?",
+        options: ["GET", "POST", "PUT", "DELETE"],
+        correctIndex: 1,
+      },
+      {
+        id: "rest-2",
+        prompt: "What does HTTP status code 404 indicate?",
+        options: [
+          "Server error",
+          "Unauthorized",
+          "Not found",
+          "Bad request",
+        ],
+        correctIndex: 2,
+      },
+      {
+        id: "rest-3",
+        prompt: "What is the difference between PUT and PATCH?",
+        options: [
+          "They are the same",
+          "PUT replaces the entire resource; PATCH updates partial fields",
+          "PATCH is deprecated",
+          "PUT is only for creating resources",
+        ],
+        correctIndex: 1,
+      },
+      {
+        id: "rest-4",
+        prompt: "What makes an API \"RESTful\"?",
+        options: [
+          "It uses JSON",
+          "It follows REST architectural constraints (stateless, resource-based URLs, etc.)",
+          "It runs on port 80",
+          "It uses GraphQL",
+        ],
+        correctIndex: 1,
+      },
+    ],
+  },
 ];
 
 export function getAssessmentDef(slug: string): AssessmentDef | undefined {

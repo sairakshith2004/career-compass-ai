@@ -8,9 +8,16 @@ import {
   XCircle,
   GraduationCap,
   UserRoundCog,
+  Clock,
+  Rocket,
+  Briefcase,
+  ClipboardCheck,
+  Route as RouteIcon,
+  Upload,
 } from "lucide-react";
 import { Panel, Badge, EmptyState } from "@/components/worklens/Panel";
-import { getDashboardData } from "@/lib/server-fns";
+import { cn } from "@/lib/utils";
+import { getDashboardData, getRecentActivity } from "@/lib/server-fns";
 import { getProfileSummary } from "@/lib/onboarding-fns";
 
 export const Route = createFileRoute("/app/")({
@@ -30,8 +37,12 @@ export const Route = createFileRoute("/app/")({
     ],
   }),
   loader: async () => {
-    const [data, profile] = await Promise.all([getDashboardData(), getProfileSummary()]);
-    return { data, profile };
+    const [data, profile, activity] = await Promise.all([
+      getDashboardData(),
+      getProfileSummary(),
+      getRecentActivity(),
+    ]);
+    return { data, profile, activity };
   },
   component: Dashboard,
 });
@@ -142,7 +153,7 @@ function ProfileSummaryCard({
 }
 
 function Dashboard() {
-  const { data, profile } = Route.useLoaderData();
+  const { data, profile, activity } = Route.useLoaderData();
 
   if (!data.signedIn) {
     return (
@@ -350,6 +361,80 @@ function Dashboard() {
           </ul>
         </Panel>
       </div>
+
+      {/* Activity feed */}
+      {activity.length > 0 && (
+        <Panel title="Recent activity" description="Your career journey at a glance.">
+          <ol className="space-y-3">
+            {activity.slice(0, 8).map((a) => (
+              <li key={a.id} className="flex items-start gap-3 text-sm">
+                <ActivityIcon type={a.type} />
+                <div className="min-w-0 flex-1">
+                  <p className="text-foreground">{formatActivity(a.type, a.metadata)}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {new Date(a.createdAt).toLocaleDateString(undefined, {
+                      month: "short",
+                      day: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </Panel>
+      )}
     </div>
   );
+}
+
+function ActivityIcon({ type }: { type: string }) {
+  const iconClass = "size-4 shrink-0 mt-0.5";
+  switch (type) {
+    case "resume_analyzed":
+      return <FileText className={cn(iconClass, "text-primary")} />;
+    case "assessment_completed":
+      return <ClipboardCheck className={cn(iconClass, "text-success")} />;
+    case "skill_gaps_identified":
+      return <AlertTriangle className={cn(iconClass, "text-warning")} />;
+    case "roadmap_created":
+      return <RouteIcon className={cn(iconClass, "text-primary")} />;
+    case "career_goal_set":
+    case "career_goal_changed":
+      return <Target className={cn(iconClass, "text-primary")} />;
+    case "profile_completed":
+      return <GraduationCap className={cn(iconClass, "text-success")} />;
+    default:
+      return <Clock className={cn(iconClass, "text-muted-foreground")} />;
+  }
+}
+
+function formatActivity(type: string, metadata: Record<string, unknown> | null): string {
+  const name = (metadata?.["name"] ?? metadata?.["title"] ?? "") as string;
+  switch (type) {
+    case "resume_analyzed":
+      return `Resume analyzed — ${metadata?.["skills"] ?? 0} skills detected`;
+    case "assessment_completed":
+      return `Completed ${name || "assessment"} — scored ${metadata?.["score"] ?? "?"}%`;
+    case "skill_gaps_identified":
+      return `${metadata?.["open"] ?? 0} skill gaps identified for your target role`;
+    case "roadmap_created":
+      return `Generated a ${metadata?.["phases"] ?? ""}-phase roadmap toward ${metadata?.["career"] ?? "your target"}`;
+    case "career_goal_set":
+    case "career_goal_changed":
+      return `Career goal updated`;
+    case "profile_completed":
+      return `Profile setup completed`;
+    case "project_started":
+      return `Started project: ${name}`;
+    case "project_completed":
+      return `Completed project: ${name}`;
+    case "task_completed":
+      return `Completed task: ${name}`;
+    case "login":
+      return `Signed in`;
+    default:
+      return type.replace(/_/g, " ");
+  }
 }

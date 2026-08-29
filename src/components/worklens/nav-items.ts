@@ -8,6 +8,8 @@ import {
   Settings,
   GraduationCap,
   Target,
+  Rocket,
+  FolderOpen,
   type LucideIcon,
 } from "lucide-react";
 
@@ -28,6 +30,8 @@ export const NAV_ITEMS: NavItem[] = [
   { to: "/app/jobs", label: "Jobs", icon: Briefcase, gated: true },
   { to: "/app/resume", label: "Resume", icon: FileText },
   { to: "/app/skills", label: "Skills", icon: Radar, gated: true },
+  { to: "/app/projects", label: "Projects", icon: Rocket, gated: true },
+  { to: "/app/applications", label: "Applications", icon: FolderOpen, gated: true },
   { to: "/app/assessments", label: "Assessments", icon: ClipboardCheck, gated: true },
   { to: "/app/roadmap", label: "Roadmap", icon: RouteIcon, gated: true },
   { to: "/app/settings", label: "Settings", icon: Settings },

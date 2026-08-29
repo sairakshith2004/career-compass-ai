@@ -21,12 +21,14 @@ import {
   userPreferences,
   userSkills,
 } from "./db/schema";
+import { userSkillHistory } from "./db/career-schema";
 import { extractSkillSlugs } from "./skill-matching";
 import { recordStudentSkill } from "./student-skills.server";
 import { recordActivity } from "./activity.server";
 import { levelFromScore } from "./career-levels";
 import { getPrimaryGoal } from "./career.server";
 import { recomputeSkillGaps } from "./skill-gap-engine.server";
+import { getActivity, type ActivityEntry } from "./activity.server";
 
 /** Which social login buttons the login page should render. No secrets leave the server. */
 export const getEnabledProviders = createServerFn({ method: "GET" }).handler(
@@ -113,6 +115,8 @@ export const getLatestResume = createServerFn({ method: "GET" }).handler(async (
  * confidence (how often a skill was mentioned — see `confidenceFromMentions`) and, once an
  * assessment has been taken for that skill, a real verified level and score. A skill can
  * have either, both, or (if only assessed, never seen in the resume) just the verified side.
+ *
+ * Enhanced to return category grouping, evidence details, current level, and skill history.
  */
 export const getUserSkills = createServerFn({ method: "GET" }).handler(async () => {
   const session = await auth.api.getSession({ headers: getRequestHeaders() });
@@ -126,6 +130,11 @@ export const getUserSkills = createServerFn({ method: "GET" }).handler(async () 
       confidence: userSkills.confidence,
       source: userSkills.source,
       verifiedLevel: userSkills.verifiedLevel,
+      claimedLevel: userSkills.claimedLevel,
+      currentLevel: userSkills.currentLevel,
+      score: userSkills.score,
+      evidence: userSkills.evidence,
+      lastAssessedAt: userSkills.lastAssessedAt,
     })
     .from(userSkills)
     .innerJoin(skills, eq(skills.id, userSkills.skillId))
@@ -138,6 +147,11 @@ export const getUserSkills = createServerFn({ method: "GET" }).handler(async () 
     resumeConfidence: number | null;
     verifiedLevel: "beginner" | "intermediate" | "advanced" | "expert" | null;
     verifiedConfidence: number | null;
+    claimedLevel: "beginner" | "intermediate" | "advanced" | "expert" | null;
+    currentLevel: "beginner" | "intermediate" | "advanced" | "expert" | null;
+    score: number | null;
+    evidence: { kind: string; label: string }[] | null;
+    lastAssessedAt: Date | null;
   };
 
   const bySkill = new Map<string, MergedSkill>();
@@ -149,12 +163,24 @@ export const getUserSkills = createServerFn({ method: "GET" }).handler(async () 
       resumeConfidence: null,
       verifiedLevel: null,
       verifiedConfidence: null,
+      claimedLevel: null,
+      currentLevel: null,
+      score: null,
+      evidence: null,
+      lastAssessedAt: null,
     };
-    if (r.source === "resume") existing.resumeConfidence = r.confidence;
+    if (r.source === "resume") {
+      existing.resumeConfidence = r.confidence;
+      existing.claimedLevel = r.claimedLevel;
+      if (!existing.evidence && r.evidence) existing.evidence = r.evidence;
+    }
     if (r.source === "assessment") {
       existing.verifiedLevel = r.verifiedLevel;
       existing.verifiedConfidence = r.confidence;
+      existing.score = r.score;
+      existing.lastAssessedAt = r.lastAssessedAt;
     }
+    existing.currentLevel = r.currentLevel ?? existing.currentLevel;
     bySkill.set(r.slug, existing);
   }
 
@@ -163,6 +189,89 @@ export const getUserSkills = createServerFn({ method: "GET" }).handler(async () 
       (b.verifiedConfidence ?? b.resumeConfidence ?? 0) -
       (a.verifiedConfidence ?? a.resumeConfidence ?? 0),
   );
+});
+
+/**
+ * Skill history for a specific skill — shows level progression over time.
+ */
+export const getSkillHistory = createServerFn({ method: "GET" })
+  .validator(z.object({ slug: z.string().min(1) }))
+  .handler(async ({ data }) => {
+    const session = await auth.api.getSession({ headers: getRequestHeaders() });
+    if (!session?.user) return [];
+
+    const [skill] = await db
+      .select({ id: skills.id })
+      .from(skills)
+      .where(eq(skills.slug, data.slug))
+      .limit(1);
+    if (!skill) return [];
+
+    return db
+      .select({
+        previousLevel: userSkillHistory.previousLevel,
+        newLevel: userSkillHistory.newLevel,
+        score: userSkillHistory.score,
+        source: userSkillHistory.source,
+        reason: userSkillHistory.reason,
+        createdAt: userSkillHistory.createdAt,
+      })
+      .from(userSkillHistory)
+      .where(
+        and(eq(userSkillHistory.userId, session.user.id), eq(userSkillHistory.skillId, skill.id)),
+      )
+      .orderBy(userSkillHistory.createdAt);
+  });
+
+/**
+ * Skills grouped by category for the Skills page overview.
+ */
+export const getSkillCategories = createServerFn({ method: "GET" }).handler(async () => {
+  const session = await auth.api.getSession({ headers: getRequestHeaders() });
+  if (!session?.user) return [];
+
+  const rows = await db
+    .select({
+      category: skills.category,
+      slug: skills.slug,
+      name: skills.name,
+      confidence: userSkills.confidence,
+      source: userSkills.source,
+      verifiedLevel: userSkills.verifiedLevel,
+      currentLevel: userSkills.currentLevel,
+    })
+    .from(userSkills)
+    .innerJoin(skills, eq(skills.id, userSkills.skillId))
+    .where(eq(userSkills.userId, session.user.id));
+
+  const categoryMap = new Map<
+    string,
+    {
+      name: string;
+      skills: typeof rows;
+      avgConfidence: number;
+      verifiedCount: number;
+    }
+  >();
+
+  for (const r of rows) {
+    const cat = r.category ?? "Other";
+    const existing = categoryMap.get(cat) ?? { name: cat, skills: [], avgConfidence: 0, verifiedCount: 0 };
+    existing.skills.push(r);
+    categoryMap.set(cat, existing);
+  }
+
+  return [...categoryMap.values()]
+    .map((c) => {
+      const confidences = c.skills.map((s) => s.confidence ?? 0).filter((x) => x > 0);
+      c.avgConfidence =
+        confidences.length > 0
+          ? Math.round(confidences.reduce((a, b) => a + b, 0) / confidences.length)
+          : 0;
+      c.verifiedCount = c.skills.filter((s) => s.verifiedLevel != null).length;
+      return c;
+    })
+    .sort((a, b) => b.skills.length - a.skills.length);
 });
 
 const jobInput = z.object({
@@ -532,6 +641,13 @@ export const submitAssessment = createServerFn({ method: "POST" })
 
     return { score, correct, total: def.questions.length, verifiedLevel };
   });
+
+/** Recent activity for the dashboard activity feed. */
+export const getRecentActivity = createServerFn({ method: "GET" }).handler(async () => {
+  const session = await auth.api.getSession({ headers: getRequestHeaders() });
+  if (!session?.user) return [];
+  return getActivity(session.user.id, 10);
+});
 
 /**
  * The member's active roadmap (with weeks) if one exists, plus how many skill gaps are

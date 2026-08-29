@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useMutation } from "@tanstack/react-query";
@@ -141,6 +141,51 @@ function PreferencesForm({
   );
 }
 
+function DangerZone() {
+  const [confirming, setConfirming] = useState(false);
+
+  return (
+    <Panel title="Danger zone" className="border-destructive/30">
+      <p className="text-sm text-muted-foreground">
+        Deleting your account will permanently remove all your data including resumes, skills,
+        assessments, roadmaps, and job applications. This action cannot be undone.
+      </p>
+      <div className="mt-4">
+        {!confirming ? (
+          <button
+            onClick={() => setConfirming(true)}
+            className="rounded-lg border border-destructive/50 px-4 py-2 text-sm font-medium text-destructive hover:bg-destructive/5"
+         >
+            Delete account
+          </button>
+        ) : (
+          <div className="flex items-center gap-3">
+            <p className="text-sm font-medium text-destructive">
+              Are you sure? This cannot be undone.
+            </p>
+            <button
+              onClick={() => {
+                /* TODO: implement account deletion */
+                toast.error("Account deletion is not yet implemented.");
+                setConfirming(false);
+              }}
+              className="rounded-lg bg-destructive px-4 py-2 text-sm font-medium text-white hover:bg-destructive/90"
+            >
+              Yes, delete my account
+            </button>
+            <button
+              onClick={() => setConfirming(false)}
+              className="rounded-lg border border-input px-4 py-2 text-sm font-medium hover:bg-muted"
+            >
+              Cancel
+            </button>
+          </div>
+        )}
+      </div>
+    </Panel>
+  );
+}
+
 function Settings() {
   const { user, preferences } = Route.useLoaderData();
 
@@ -175,6 +220,9 @@ function Settings() {
           <p className="text-sm text-muted-foreground">Sign in to configure your preferences.</p>
         )}
       </Panel>
+
+      {/* Danger zone */}
+      {user && <DangerZone />}
     </div>
   );
 }
