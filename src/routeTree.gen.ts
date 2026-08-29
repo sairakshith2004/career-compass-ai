@@ -17,6 +17,7 @@ import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as AppIndexRouteImport } from './routes/app.index'
 import { Route as AppAssessmentsRouteImport } from './routes/app.assessments'
+import { Route as AppCareerRouteImport } from './routes/app.career'
 import { Route as AppJobsRouteImport } from './routes/app.jobs'
 import { Route as AppOnboardingRouteImport } from './routes/app.onboarding'
 import { Route as AppResumeRouteImport } from './routes/app.resume'
@@ -65,6 +66,11 @@ const AppAssessmentsRoute = AppAssessmentsRouteImport.update({
   path: '/assessments',
   getParentRoute: () => AppRoute,
 } as any)
+const AppCareerRoute = AppCareerRouteImport.update({
+  id: '/career',
+  path: '/career',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppJobsRoute = AppJobsRouteImport.update({
   id: '/jobs',
   path: '/jobs',
@@ -109,6 +115,7 @@ export interface FileRoutesByFullPath {
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
   '/app/assessments': typeof AppAssessmentsRoute
+  '/app/career': typeof AppCareerRoute
   '/app/jobs': typeof AppJobsRoute
   '/app/onboarding': typeof AppOnboardingRoute
   '/app/resume': typeof AppResumeRoute
@@ -125,6 +132,7 @@ export interface FileRoutesByTo {
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
   '/app/assessments': typeof AppAssessmentsRoute
+  '/app/career': typeof AppCareerRoute
   '/app/jobs': typeof AppJobsRoute
   '/app/onboarding': typeof AppOnboardingRoute
   '/app/resume': typeof AppResumeRoute
@@ -143,6 +151,7 @@ export interface FileRoutesById {
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
   '/app/assessments': typeof AppAssessmentsRoute
+  '/app/career': typeof AppCareerRoute
   '/app/jobs': typeof AppJobsRoute
   '/app/onboarding': typeof AppOnboardingRoute
   '/app/resume': typeof AppResumeRoute
@@ -162,6 +171,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/signup'
     | '/app/assessments'
+    | '/app/career'
     | '/app/jobs'
     | '/app/onboarding'
     | '/app/resume'
@@ -178,6 +188,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/signup'
     | '/app/assessments'
+    | '/app/career'
     | '/app/jobs'
     | '/app/onboarding'
     | '/app/resume'
@@ -195,6 +206,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/signup'
     | '/app/assessments'
+    | '/app/career'
     | '/app/jobs'
     | '/app/onboarding'
     | '/app/resume'
@@ -273,6 +285,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAssessmentsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/career': {
+      id: '/app/career'
+      path: '/career'
+      fullPath: '/app/career'
+      preLoaderRoute: typeof AppCareerRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/jobs': {
       id: '/app/jobs'
       path: '/jobs'
@@ -327,6 +346,7 @@ declare module '@tanstack/react-router' {
 
 interface AppRouteChildren {
   AppAssessmentsRoute: typeof AppAssessmentsRoute
+  AppCareerRoute: typeof AppCareerRoute
   AppJobsRoute: typeof AppJobsRoute
   AppOnboardingRoute: typeof AppOnboardingRoute
   AppResumeRoute: typeof AppResumeRoute
@@ -338,6 +358,7 @@ interface AppRouteChildren {
 
 const AppRouteChildren: AppRouteChildren = {
   AppAssessmentsRoute: AppAssessmentsRoute,
+  AppCareerRoute: AppCareerRoute,
   AppJobsRoute: AppJobsRoute,
   AppOnboardingRoute: AppOnboardingRoute,
   AppResumeRoute: AppResumeRoute,

@@ -264,12 +264,12 @@ export async function getActiveRoadmap(userId: string): Promise<RoadmapView> {
     db
       .select()
       .from(roadmapPhases)
-      .where(eq(roadmapPhases.roadmapId, roadmap.id))
+      .where(and(eq(roadmapPhases.roadmapId, roadmap.id), eq(roadmapPhases.userId, userId)))
       .orderBy(roadmapPhases.orderIndex),
     db
       .select()
       .from(roadmapTasks)
-      .where(eq(roadmapTasks.roadmapId, roadmap.id))
+      .where(and(eq(roadmapTasks.roadmapId, roadmap.id), eq(roadmapTasks.userId, userId)))
       .orderBy(roadmapTasks.orderIndex),
   ]);
 
@@ -373,7 +373,7 @@ async function recomputeProgress(userId: string, roadmapId: string) {
   const tasks = await db
     .select({ phaseId: roadmapTasks.phaseId, status: roadmapTasks.status })
     .from(roadmapTasks)
-    .where(eq(roadmapTasks.roadmapId, roadmapId));
+    .where(and(eq(roadmapTasks.roadmapId, roadmapId), eq(roadmapTasks.userId, userId)));
 
   const byPhase = new Map<string, { done: number; total: number; active: number }>();
   let done = 0;
@@ -382,7 +382,7 @@ async function recomputeProgress(userId: string, roadmapId: string) {
     p.total++;
     if (t.status === "completed" || t.status === "skipped") p.done++;
     if (t.status === "in_progress") p.active++;
-    if (t.status === "completed") done++;
+    if (t.status === "completed" || t.status === "skipped") done++;
     byPhase.set(t.phaseId, p);
   }
 
@@ -397,7 +397,7 @@ async function recomputeProgress(userId: string, roadmapId: string) {
     await db
       .update(roadmapPhases)
       .set({ progressPercent: pct, status, updatedAt: new Date() })
-      .where(eq(roadmapPhases.id, phaseId));
+      .where(and(eq(roadmapPhases.id, phaseId), eq(roadmapPhases.userId, userId)));
   }
 
   const roadmapPct = tasks.length === 0 ? 0 : Math.round((done / tasks.length) * 100);
@@ -457,7 +457,7 @@ export async function completeTask(
   const [rm] = await db
     .select({ p: careerRoadmaps.progressPercent })
     .from(careerRoadmaps)
-    .where(eq(careerRoadmaps.id, task.roadmapId))
+    .where(and(eq(careerRoadmaps.id, task.roadmapId), eq(careerRoadmaps.userId, userId)))
     .limit(1);
   return { status: "completed", roadmapProgress: rm?.p ?? 0 };
 }
@@ -571,12 +571,12 @@ export async function getContinueState(userId: string): Promise<ContinueState> {
     db
       .select()
       .from(roadmapPhases)
-      .where(eq(roadmapPhases.roadmapId, roadmap.id))
+      .where(and(eq(roadmapPhases.roadmapId, roadmap.id), eq(roadmapPhases.userId, userId)))
       .orderBy(roadmapPhases.orderIndex),
     db
       .select()
       .from(roadmapTasks)
-      .where(eq(roadmapTasks.roadmapId, roadmap.id))
+      .where(and(eq(roadmapTasks.roadmapId, roadmap.id), eq(roadmapTasks.userId, userId)))
       .orderBy(roadmapTasks.orderIndex),
   ]);
   const phaseById = new Map(phases.map((p) => [p.id, p]));

@@ -7,6 +7,7 @@ import {
   Route as RouteIcon,
   Settings,
   GraduationCap,
+  Target,
   type LucideIcon,
 } from "lucide-react";
 
@@ -23,6 +24,7 @@ export type NavItem = {
 export const NAV_ITEMS: NavItem[] = [
   { to: "/app", label: "Dashboard", icon: LayoutDashboard },
   { to: "/app/onboarding", label: "Profile", icon: GraduationCap },
+  { to: "/app/career", label: "Career", icon: Target },
   { to: "/app/jobs", label: "Jobs", icon: Briefcase, gated: true },
   { to: "/app/resume", label: "Resume", icon: FileText },
   { to: "/app/skills", label: "Skills", icon: Radar, gated: true },

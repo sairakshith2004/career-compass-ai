@@ -71,6 +71,13 @@
       "when": 1788022537856,
       "tag": "0009_lowly_frightful_four",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1788025021561,
+      "tag": "0010_spotty_centennial",
+      "breakpoints": true
     }
   ]
 }

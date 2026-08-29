@@ -192,10 +192,19 @@ export const studentProfiles = sqliteTable(
     // Step 3 — current semester (1–12), only meaningful while still studying.
     currentSemester: integer("current_semester"),
     // Step 4 — where the student wants to work (city / region / "Remote").
-    // Distinct from `country_code`, which is where they study.
+    // Distinct from `country_code`, which is where they study. Kept for
+    // back-compat; the Career Profile (Phase 6) uses `preferredLocations` and
+    // mirrors its first entry here.
     preferredWorkLocation: text("preferred_work_location"),
     // Step 4 — any other non-sensitive career context the student wants to add.
     careerNotes: text("career_notes"),
+    // --- Career Profile preferences (Phase 6) ---------------------------------
+    // Slugs from career-profile-catalog.ts. JSON arrays so the set can grow
+    // without a schema change.
+    preferredIndustries: text("preferred_industries", { mode: "json" }).$type<string[]>(),
+    preferredJobTypes: text("preferred_job_types", { mode: "json" }).$type<string[]>(),
+    preferredLocations: text("preferred_locations", { mode: "json" }).$type<string[]>(),
+    workMode: text("work_mode", { enum: ["remote", "hybrid", "onsite", "flexible"] }),
     // 0–100, recomputed by profile-completion.server.ts.
     profileCompletion: integer("profile_completion").notNull().default(0),
     // AI-detected branch — stored separately from the student's DECLARED
@@ -218,9 +227,11 @@ export const studentProfiles = sqliteTable(
   ],
 );
 
-// The student's target career(s). Many-to-many so it covers both "I know
-// exactly what I want" (one row) and "I have a few options" (several); empty
-// when the student is unsure.
+// The student's target career role(s) — the "what job they want" half of the
+// Career Profile (Phase 6). Many-to-many so it covers "I know exactly what I
+// want" (one row) and "I have a few options" (several). Exactly one row may be
+// `isPrimary` at a time (enforced in the service). Phase 7's skill-gap engine
+// reads the primary row's `career_id` and joins `career_skill_requirements`.
 export const studentTargetCareers = sqliteTable(
   "student_target_careers",
   {
@@ -231,11 +242,13 @@ export const studentTargetCareers = sqliteTable(
     careerId: text("career_id")
       .notNull()
       .references(() => careers.id, { onDelete: "cascade" }),
+    isPrimary: integer("is_primary", { mode: "boolean" }).notNull().default(false),
     ...timestamps,
   },
   (table) => [
     unique("student_target_careers_user_career_unique").on(table.userId, table.careerId),
     index("student_target_careers_user_idx").on(table.userId),
+    index("student_target_careers_user_primary_idx").on(table.userId, table.isPrimary),
   ],
 );
 
