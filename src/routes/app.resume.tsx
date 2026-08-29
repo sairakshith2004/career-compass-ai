@@ -1,24 +1,37 @@
 import { useEffect, useRef, useState } from "react";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useMutation } from "@tanstack/react-query";
+import { z } from "zod";
 import {
   AlertTriangle,
   BadgeCheck,
   Brain,
   CheckCircle2,
+  Clock,
   FileText,
   FlaskConical,
   GraduationCap,
+  History,
   Loader2,
   RotateCw,
   Sparkles,
+  Trash2,
   UploadCloud,
   XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Panel, EmptyState, Badge } from "@/components/worklens/Panel";
-import { getResume, uploadResume, analyzeResume, type ResumeView } from "@/lib/resume-fns";
+import {
+  getResume,
+  getResumeVersion,
+  uploadResume,
+  analyzeResume,
+  listResumes,
+  deleteResume,
+  type ResumeView,
+  type ResumeVersionCard,
+} from "@/lib/resume-fns";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/app/resume")({
@@ -32,7 +45,15 @@ export const Route = createFileRoute("/app/resume")({
       },
     ],
   }),
-  loader: (): Promise<ResumeView> => getResume(),
+  validateSearch: z.object({ resume: z.string().optional().catch(undefined) }),
+  loaderDeps: ({ search }) => ({ resume: search.resume }),
+  loader: async ({ deps }): Promise<{ view: ResumeView; versions: ResumeVersionCard[] }> => {
+    const [view, versions] = await Promise.all([
+      deps.resume ? getResumeVersion({ data: { resumeId: deps.resume } }) : getResume(),
+      listResumes(),
+    ]);
+    return { view, versions };
+  },
   component: ResumePage,
 });
 
@@ -49,14 +70,27 @@ const EVIDENCE_LABEL: Record<string, string> = {
 };
 
 function ResumePage() {
-  const view = Route.useLoaderData();
+  const { view, versions } = Route.useLoaderData();
+  const { resume: viewingId } = Route.useSearch();
+  const navigate = Route.useNavigate();
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragActive, setDragActive] = useState(false);
   const [clientState, setClientState] = useState<ClientState>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const serverStatus = view.resume?.status ?? null;
+  const viewingHistorical = Boolean(viewingId) && !view.resume?.isActive;
+  const serverStatus = viewingHistorical ? null : (view.resume?.status ?? null);
+
+  const del = useMutation({
+    mutationFn: (resumeId: string) => deleteResume({ data: { resumeId } }),
+    onSuccess: async () => {
+      await navigate({ search: {}, replace: true });
+      await router.invalidate();
+      toast.success("Résumé version deleted");
+    },
+    onError: () => toast.error("Couldn't delete that version — try again"),
+  });
 
   const analyze = useMutation({
     mutationFn: (resumeId: string) => analyzeResume({ data: { resumeId } }),
@@ -79,7 +113,9 @@ function ResumePage() {
       fd.append("file", file);
       return uploadResume({ data: fd });
     },
-    onSuccess: ({ resumeId }) => {
+    onSuccess: async ({ resumeId }) => {
+      // A new upload is a new version — drop any `?resume=` we were viewing.
+      if (viewingId) await navigate({ search: {}, replace: true });
       setClientState("analyzing");
       analyze.mutate(resumeId);
     },
@@ -96,8 +132,9 @@ function ResumePage() {
     upload.mutate(file);
   }
 
-  // If the user reloads while the server row is mid-pipeline, offer to resume.
-  const stuck = serverStatus === "processing" || serverStatus === "analyzing";
+  // If the user reloads while the ACTIVE resume is mid-pipeline, resume it.
+  const stuck =
+    !viewingHistorical && (serverStatus === "processing" || serverStatus === "analyzing");
   useEffect(() => {
     if (stuck && clientState === "idle" && view.resume && !analyze.isPending) {
       setClientState("analyzing");
@@ -179,6 +216,33 @@ function ResumePage() {
         )}
       </Panel>
 
+      {versions.length > 0 && (
+        <VersionHistory
+          versions={versions}
+          viewingId={viewingId ?? null}
+          busy={busy || del.isPending}
+          onView={(id) => navigate({ search: id ? { resume: id } : {} })}
+          onDelete={(id) => del.mutate(id)}
+        />
+      )}
+
+      {viewingHistorical && view.resume && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/30 bg-primary/5 p-4 text-sm">
+          <span className="flex items-center gap-2 text-muted-foreground">
+            <History className="size-4 text-primary" />
+            Viewing{" "}
+            <span className="font-medium text-foreground">résumé v{view.resume.version}</span> —
+            this is not your active résumé.
+          </span>
+          <button
+            onClick={() => navigate({ search: {} })}
+            className="rounded-lg border border-input px-3 py-1.5 text-xs font-medium hover:bg-muted"
+          >
+            Back to current
+          </button>
+        </div>
+      )}
+
       {view.resume && !phase && serverStatus === "failed" && !errorMessage && (
         <Panel title="Last analysis failed">
           <div className="flex items-center justify-between gap-4">
@@ -249,6 +313,86 @@ function ProcessingStrip({ phase }: { phase: ProcessingPhase }) {
         AI analysis can take up to a minute. You can leave this page — it keeps running.
       </p>
     </div>
+  );
+}
+
+// --- version history --------------------------------------------------------
+
+const STATUS_LABEL: Record<string, string> = {
+  uploaded: "Uploaded",
+  extracting_text: "Extracting text",
+  processing: "Text ready",
+  analyzing: "Analyzing",
+  complete: "Analyzed",
+  failed: "Failed",
+};
+
+function VersionHistory({
+  versions,
+  viewingId,
+  busy,
+  onView,
+  onDelete,
+}: {
+  versions: ResumeVersionCard[];
+  viewingId: string | null;
+  busy: boolean;
+  onView: (id: string | null) => void;
+  onDelete: (id: string) => void;
+}) {
+  return (
+    <Panel
+      title="Résumé versions"
+      description="Every upload is kept as a new version. Your most recent one is active; older analyses stay available."
+    >
+      <ul className="divide-y divide-border">
+        {versions.map((v) => {
+          const selected = viewingId === v.id || (!viewingId && v.isActive);
+          return (
+            <li
+              key={v.id}
+              className={cn(
+                "flex flex-wrap items-center gap-3 py-3 text-sm",
+                selected && "rounded-lg bg-muted/50 px-2",
+              )}
+            >
+              <FileText className="size-4 shrink-0 text-muted-foreground" />
+              <span className="font-medium">v{v.version}</span>
+              <span className="max-w-[16rem] truncate text-muted-foreground">{v.fileName}</span>
+              {v.isActive && <Badge tone="success">Active</Badge>}
+              <Badge tone={v.status === "failed" ? "warning" : "muted"}>
+                {STATUS_LABEL[v.status] ?? v.status}
+              </Badge>
+              <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                <Clock className="size-3" />
+                {new Date(v.uploadedAt).toLocaleDateString()}
+              </span>
+              <div className="ml-auto flex items-center gap-2">
+                {v.hasAnalysis && !selected && (
+                  <button
+                    onClick={() => onView(v.isActive ? null : v.id)}
+                    className="rounded-lg border border-input px-2.5 py-1 text-xs font-medium hover:bg-muted"
+                  >
+                    View
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    if (confirm(`Delete résumé v${v.version}? This can't be undone.`))
+                      onDelete(v.id);
+                  }}
+                  disabled={busy}
+                  title="Delete this version"
+                  className="rounded-lg p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
+                >
+                  <Trash2 className="size-3.5" />
+                </button>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </Panel>
   );
 }
 

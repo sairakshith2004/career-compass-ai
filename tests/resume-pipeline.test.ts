@@ -45,16 +45,28 @@ describe("ingest", () => {
     expect(row!.fileName).toBe("resume.pdf");
   });
 
-  test("re-uploading replaces the previous resume", async () => {
-    await ingestResumeUpload(alice, pdfFile("First resume text ".repeat(10), "first.pdf"));
-    const { resumeId: second } = await ingestResumeUpload(
+  test("re-uploading creates a new version and preserves the previous one", async () => {
+    const { resumeId: first, version: v1 } = await ingestResumeUpload(
+      alice,
+      pdfFile("First resume text ".repeat(10), "first.pdf"),
+    );
+    const { resumeId: second, version: v2 } = await ingestResumeUpload(
       alice,
       pdfFile("Second resume text ".repeat(10), "second.pdf"),
     );
+    expect(v2).toBe(v1 + 1);
+
     const rows = await db.select().from(resumes).where(eq(resumes.userId, alice));
-    expect(rows).toHaveLength(1);
-    expect(rows[0]!.id).toBe(second);
-    expect(rows[0]!.fileName).toBe("second.pdf");
+    // Both versions survive (plus any from earlier tests in this file).
+    const ids = rows.map((r) => r.id);
+    expect(ids).toContain(first);
+    expect(ids).toContain(second);
+    expect(rows.find((r) => r.id === first)!.fileName).toBe("first.pdf");
+
+    // getResumeView returns the highest version (the active one).
+    const view = await getResumeView(alice);
+    expect(view.resume!.id).toBe(second);
+    expect(view.resume!.isActive).toBe(true);
   });
 
   test("invalid file is rejected before anything is stored", async () => {

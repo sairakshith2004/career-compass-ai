@@ -270,3 +270,65 @@ generic to typed user-safe errors (and the auth message never echoes provider
 detail); a partial/fabricated object fails the Zod re-check.
 
 Total: **90 tests pass** across phases 1–5.
+
+---
+
+# Résumé versioning + version API
+
+A later pass added **version history** — a new upload no longer destroys the
+previous résumé.
+
+## Model — migration `0009_lowly_frightful_four` (additive)
+
+- `resumes.version` — 1-based, monotonically increasing **per user**;
+  `unique(user_id, version)`. The **active** résumé is simply the highest
+  `version`; deleting it promotes the next one down. No `is_active` column.
+- New indexes: `resumes_status_idx`, `resumes_user_created_idx`,
+  `resume_analyses_user_created_idx`.
+- `status` enum gains `extracting_text` (between `uploaded` and `processing`) for
+  a future async extraction worker; the current synchronous path still goes
+  straight to `processing` / `failed`.
+
+## Behaviour
+
+- `ingestResumeUpload` computes `version = max(version)+1` for the user and
+  inserts a new row. **It never deletes prior rows, files or analyses.** A
+  concurrent double-upload is safe — the `unique(user_id, version)` index makes
+  the loser retry with a fresh number (bounded retry loop).
+- `runResumeAnalysis` clears only **this** résumé's stale analysis on retry;
+  other versions are untouched.
+- An image-only / scanned PDF still lands at `status = "failed"` with a specific
+  "looks like a scanned or image-only PDF" message — never a fake success.
+
+## API (`src/lib/resume-fns.ts`, all `requireUser()` + owner-scoped by id)
+
+| RPC                            | Purpose                                                        |
+| ------------------------------ | ------------------------------------------------------------- |
+| `uploadResume`                 | new version → `{ resumeId, version }`                        |
+| `analyzeResume({ resumeId })`  | run / retry analysis for a version the caller owns           |
+| `getResume()`                  | active version + analysis + discrepancies                    |
+| `getResumeVersion({ resumeId })` | a specific past version (owner-scoped; foreign id → empty)   |
+| `listResumes()`                | every version, newest first (`version`, `isActive`, `hasAnalysis`, status) |
+| `deleteResume({ resumeId })`   | delete one version: file + row + cascade; `false` if not owned |
+
+A foreign `resumeId` never yields another user's data — it's always used as
+`id = ? AND user_id = ?`. Covered by `tests/resume-versioning.test.ts` (8 cases):
+version increment, history preserved (rows + files + analyses), active =
+highest version, old version viewable by id, `listResumeVersions` shape, delete
+promotes the next version, re-analyzing an old version doesn't disturb others,
+and cross-user view/delete refusal + RPC auth rejection.
+
+## Frontend
+
+`/app/resume` gains a **Résumé versions** panel (v3 Active / v2 / v1, each with
+status, date, **View** for analysed older versions, **Delete** with confirm).
+`?resume=<id>` renders a past version behind a "not your active résumé" banner.
+A new upload clears the param and analyses the new version.
+
+## Observability
+
+`resumeLog(event, meta)` in `resume.server.ts` emits one line per lifecycle
+event — `upload_started/completed`, `extraction_started/failed`,
+`analysis_started/completed/failed`, `resume_deleted` — with **safe metadata
+only** (`userId`, `resumeId`, `version`, char counts, model, durationMs, error
+*code*). Never the résumé text, analysis content, filenames' paths, or secrets.

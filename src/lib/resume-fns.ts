@@ -3,24 +3,28 @@ import { z } from "zod";
 
 import { requireUser } from "./session.server";
 import {
+  deleteResumeVersion,
   getResumeView,
   ingestResumeUpload,
+  listResumeVersions,
   runResumeAnalysis,
   ResumeAIError,
   ResumeUploadError,
+  type ResumeVersionCard,
   type ResumeView,
 } from "./resume.server";
 
-export type { ResumeView } from "./resume.server";
+export type { ResumeView, ResumeVersionCard } from "./resume.server";
 
 /**
  * RPC layer for resume intelligence. Every wrapper resolves the caller from the
  * verified session (`requireUser`) and passes only that id to the scoped logic
  * in resume.server.ts — no user/resume id is ever taken from the client for
- * authorization.
+ * authorization. A résumé id from the client is only ever used as an
+ * owner-scoped filter (`id = ? AND user_id = ?`).
  */
 
-/** Step 1 — validate + scan + store + extract text. Fast. */
+/** Step 1 — validate + scan + store + extract text. Fast. Creates a new version. */
 export const uploadResume = createServerFn({ method: "POST" })
   .validator((data: unknown) => {
     if (!(data instanceof FormData)) throw new Error("Expected form data");
@@ -28,7 +32,7 @@ export const uploadResume = createServerFn({ method: "POST" })
     if (!(file instanceof File)) throw new Error("A resume file is required");
     return { file };
   })
-  .handler(async ({ data }): Promise<{ resumeId: string }> => {
+  .handler(async ({ data }): Promise<{ resumeId: string; version: number }> => {
     const { id } = await requireUser();
     try {
       return await ingestResumeUpload(id, data.file);
@@ -57,10 +61,34 @@ export const analyzeResume = createServerFn({ method: "POST" })
     }
   });
 
-/** Latest resume + analysis + declared-vs-detected discrepancies. */
+/** Active résumé version + analysis + declared-vs-detected discrepancies. */
 export const getResume = createServerFn({ method: "GET" }).handler(
   async (): Promise<ResumeView> => {
     const { id } = await requireUser();
     return getResumeView(id);
   },
 );
+
+/** A specific past résumé version the caller owns (owner-scoped by id). */
+export const getResumeVersion = createServerFn({ method: "GET" })
+  .validator((data: unknown) => z.object({ resumeId: z.string().min(1) }).parse(data))
+  .handler(async ({ data }): Promise<ResumeView> => {
+    const { id } = await requireUser();
+    return getResumeView(id, data.resumeId);
+  });
+
+/** Every résumé version the caller owns, newest first. */
+export const listResumes = createServerFn({ method: "GET" }).handler(
+  async (): Promise<ResumeVersionCard[]> => {
+    const { id } = await requireUser();
+    return listResumeVersions(id);
+  },
+);
+
+/** Delete one résumé version the caller owns (file + row + cascade). */
+export const deleteResume = createServerFn({ method: "POST" })
+  .validator((data: unknown) => z.object({ resumeId: z.string().min(1) }).parse(data))
+  .handler(async ({ data }): Promise<{ deleted: boolean }> => {
+    const { id } = await requireUser();
+    return { deleted: await deleteResumeVersion(id, data.resumeId) };
+  });

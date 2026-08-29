@@ -298,13 +298,18 @@ export const userPreferences = sqliteTable("user_preferences", {
   ...timestamps,
 });
 
-// --- Resume intelligence (Phase 4) --------------------------------------
+// --- Resume intelligence (Phase 4 / Phase 5) ---------------------------------
 //
 // Pipeline: upload → validate/scan → extract text → run AI analysis.
 // `status` mirrors the UI processing states. AI-detected information is stored
 // in `resume_analyses` / `resume_skills` / `resume_career_signals`, kept
 // SEPARATE from the student's DECLARED profile (student_profiles); a
 // disagreement is surfaced, never silently applied.
+//
+// VERSIONING (Phase 5): a new upload never overwrites the previous resume — it
+// gets the next `version` for that user and its own analyses. The ACTIVE resume
+// is simply the highest `version`; deleting it promotes the next one down.
+// History (rows, files, analyses) is preserved until the user deletes a version.
 export const resumes = sqliteTable(
   "resumes",
   {
@@ -312,16 +317,19 @@ export const resumes = sqliteTable(
     userId: text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
+    // 1-based, monotonically increasing per user. `unique(user_id, version)`.
+    version: integer("version").notNull().default(1),
     // `fileName` is the sanitized, safe-to-display basename (see resume-upload.server.ts).
     fileName: text("file_name").notNull(),
     // Opaque storage key `<userId>/<uuid>.<ext>` — never a client-controlled path.
     storageKey: text("storage_key").notNull(),
     mimeType: text("mime_type").notNull(),
     sizeBytes: integer("size_bytes").notNull(),
-    // Processing state machine. `uploaded` → `processing` (extract) →
-    // `analyzing` (AI) → `complete` | `failed`. Retry re-runs from `analyzing`.
+    // Processing state machine. `uploaded` → `extracting_text` → `processing`
+    // (text ready) → `analyzing` (AI) → `complete` | `failed`. Retry re-runs
+    // from `analyzing`; a conditional update guards against concurrent retries.
     status: text("status", {
-      enum: ["uploaded", "processing", "analyzing", "complete", "failed"],
+      enum: ["uploaded", "extracting_text", "processing", "analyzing", "complete", "failed"],
     })
       .notNull()
       .default("uploaded"),
@@ -338,7 +346,12 @@ export const resumes = sqliteTable(
     parsedAt: integer("parsed_at", { mode: "timestamp" }),
     ...timestamps,
   },
-  (table) => [index("resumes_user_idx").on(table.userId)],
+  (table) => [
+    index("resumes_user_idx").on(table.userId),
+    index("resumes_status_idx").on(table.status),
+    index("resumes_user_created_idx").on(table.userId, table.createdAt),
+    unique("resumes_user_version_unique").on(table.userId, table.version),
+  ],
 );
 
 // One row per completed AI analysis of a resume (latest per resume is "current").
@@ -386,6 +399,7 @@ export const resumeAnalyses = sqliteTable(
   (table) => [
     index("resume_analyses_resume_idx").on(table.resumeId),
     index("resume_analyses_user_idx").on(table.userId),
+    index("resume_analyses_user_created_idx").on(table.userId, table.createdAt),
   ],
 );
 

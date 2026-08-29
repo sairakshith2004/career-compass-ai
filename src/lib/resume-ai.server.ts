@@ -429,7 +429,19 @@ export async function analyzeResumeText(
   const parse = deps.parse ?? realParse;
   const startedAt = Date.now();
 
-  const { analysis, stopReason, model, usage } = await parse(text);
+  let parsed: Awaited<ReturnType<NonNullable<AnalyzeDeps["parse"]>>>;
+  try {
+    parsed = await parse(text);
+  } catch (err) {
+    if (err instanceof ResumeAIError) throw err;
+    throw new ResumeAIError("provider_error", USER_MESSAGES.provider_error, err);
+  }
+
+  if (!parsed || typeof parsed !== "object") {
+    throw new ResumeAIError("malformed", USER_MESSAGES.malformed);
+  }
+
+  const { analysis, stopReason, model, usage } = parsed;
 
   if (stopReason === "refusal") {
     throw new ResumeAIError("refused", USER_MESSAGES.refused);

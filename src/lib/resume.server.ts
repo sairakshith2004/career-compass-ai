@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
 
 import { db } from "./db/client";
 import { user } from "./db/auth-schema";
@@ -39,6 +39,27 @@ import { countSkillMentions } from "./skill-matching";
 import { EXPERIENCE_LEVELS } from "./onboarding-catalog";
 import { ENGINEERING_BRANCHES } from "./taxonomy-catalog";
 
+/**
+ * Structured lifecycle logging for the resume pipeline. Emits a single JSON-ish
+ * line per event with SAFE metadata only — never the résumé text, the analysis
+ * content, a filename's full path, or any secret.
+ */
+function resumeLog(
+  event:
+    | "upload_started"
+    | "upload_completed"
+    | "extraction_started"
+    | "extraction_failed"
+    | "analysis_started"
+    | "analysis_completed"
+    | "analysis_failed"
+    | "resume_deleted",
+  meta: Record<string, string | number | boolean | null | undefined>,
+) {
+  const level = event.endsWith("_failed") ? "error" : "info";
+  console[level](`[resume] ${event}`, meta);
+}
+
 /** Remove NUL and other C0 control chars that some PDF extractors emit. */
 function stripNulls(s: string): string {
   let out = "";
@@ -57,56 +78,87 @@ function stripNulls(s: string): string {
  * `.server.ts` — server-only.
  */
 
-export type ResumeStatus = "uploaded" | "processing" | "analyzing" | "complete" | "failed";
+export type ResumeStatus =
+  "uploaded" | "extracting_text" | "processing" | "analyzing" | "complete" | "failed";
 
 // --- ingest --------------------------------------------------------------
 
+const IMAGE_ONLY_PDF_MESSAGE =
+  "We couldn't read any text from that file. It looks like a scanned or image-only PDF — " +
+  "upload a text-based export instead.";
+
 /**
  * Step 1: validate + malware-scan the upload, store the bytes, extract text,
- * and create the `resumes` row (status `processing`). Replaces any previous
- * resume for this user. Returns the new resume id; call `runResumeAnalysis`
- * next.
+ * and create a NEW `resumes` row as the next version for this user (status
+ * `processing`, or `failed` if no text could be extracted). Previous versions,
+ * their files and their analyses are left intact. Returns the new resume id +
+ * version; call `runResumeAnalysis` next.
  */
 export async function ingestResumeUpload(
   userId: string,
   file: File,
-): Promise<{ resumeId: string }> {
+): Promise<{ resumeId: string; version: number }> {
+  resumeLog("upload_started", { userId, declaredType: file.type || "unknown", size: file.size });
   const validated = await validateResumeUpload(file); // throws ResumeUploadError
-
-  // Replace the previous resume (cascades to analyses/skills/signals).
-  const prior = await db.select().from(resumes).where(eq(resumes.userId, userId));
-  for (const p of prior) await deleteResumeFile(p.storageKey);
-  await db.delete(resumes).where(eq(resumes.userId, userId));
 
   const storageKey = await saveResumeFile(userId, validated.kind, validated.bytes);
 
+  resumeLog("extraction_started", { userId, kind: validated.kind });
   let text = "";
+  let extractionFailed = false;
   try {
     text = await extractResumeText(validated.safeFileName, validated.mimeType, validated.bytes);
   } catch (err) {
-    console.error("[resume] text extraction failed:", (err as Error).message);
+    extractionFailed = true;
+    resumeLog("extraction_failed", { userId, reason: (err as Error).message.slice(0, 200) });
   }
   text = stripNulls(text).trim();
+  const hasText = text.length >= 40;
+  if (!hasText && !extractionFailed) {
+    resumeLog("extraction_failed", { userId, reason: "no_text_extracted" });
+  }
 
-  const [row] = await db
-    .insert(resumes)
-    .values({
-      userId,
-      fileName: validated.safeFileName,
-      storageKey,
-      mimeType: validated.mimeType,
-      sizeBytes: validated.sizeBytes,
-      status: text.length >= 40 ? "processing" : "failed",
-      extractedText: text.slice(0, 200_000) || null,
-      textCharCount: text.length,
-      errorMessage:
-        text.length >= 40
-          ? null
-          : "We couldn't read any text from that file. If it's a scanned PDF, upload a text-based one.",
-    })
-    .returning();
+  // Next version for this user. The `unique(user_id, version)` index makes a
+  // concurrent double-upload race safe — the loser retries with a fresh number.
+  let row: typeof resumes.$inferSelect | undefined;
+  for (let attempt = 0; attempt < 5 && !row; attempt++) {
+    const [{ max } = { max: 0 }] = await db
+      .select({ max: sql<number>`coalesce(max(${resumes.version}), 0)` })
+      .from(resumes)
+      .where(eq(resumes.userId, userId));
+    try {
+      [row] = await db
+        .insert(resumes)
+        .values({
+          userId,
+          version: Number(max) + 1,
+          fileName: validated.safeFileName,
+          storageKey,
+          mimeType: validated.mimeType,
+          sizeBytes: validated.sizeBytes,
+          status: hasText ? "processing" : "failed",
+          extractedText: text.slice(0, 200_000) || null,
+          textCharCount: text.length,
+          errorMessage: hasText
+            ? null
+            : validated.kind === "pdf"
+              ? IMAGE_ONLY_PDF_MESSAGE
+              : "We couldn't read any text from that file.",
+        })
+        .returning();
+    } catch (err) {
+      if (attempt === 4) throw err; // give up after 5 tries
+    }
+  }
 
-  return { resumeId: row!.id };
+  resumeLog("upload_completed", {
+    userId,
+    resumeId: row!.id,
+    version: row!.version,
+    textChars: text.length,
+    status: row!.status,
+  });
+  return { resumeId: row!.id, version: row!.version };
 }
 
 // --- analyze ----------------------------------------------------------------
@@ -144,17 +196,38 @@ export async function runResumeAnalysis(
   }
 
   await Promise.all([ensureSkillsSeeded(), ensureTaxonomySeeded()]);
-  // Clear any prior analysis for this resume (retry path).
-  await db.delete(resumeAnalyses).where(eq(resumeAnalyses.resumeId, resumeId));
-  await db
+
+  const [claimed] = await db
     .update(resumes)
-    .set({ status: "analyzing", errorMessage: null })
-    .where(eq(resumes.id, resumeId));
+    .set({ status: "analyzing", errorMessage: null, updatedAt: new Date() })
+    .where(
+      and(eq(resumes.id, resumeId), eq(resumes.userId, userId), ne(resumes.status, "analyzing")),
+    )
+    .returning({ id: resumes.id });
+  if (!claimed) {
+    throw new ResumeAIError(
+      "provider_error",
+      "This résumé is already being analyzed. Please wait a moment and try again.",
+    );
+  }
+
+  // Clear any prior analysis for THIS resume version only (retry path). Other
+  // versions' analyses are untouched.
+  await db.delete(resumeAnalyses).where(eq(resumeAnalyses.resumeId, resumeId));
+
+  resumeLog("analysis_started", {
+    userId,
+    resumeId,
+    version: resume.version,
+    textChars: text.length,
+  });
+  const startedAt = Date.now();
 
   let result;
   try {
     result = await analyzeResumeText(text, deps);
   } catch (err) {
+    const code = err instanceof ResumeAIError ? err.code : "unknown";
     const userMessage =
       err instanceof ResumeAIError ? err.userMessage : "The analysis failed. Please try again.";
     await db
@@ -163,10 +236,18 @@ export async function runResumeAnalysis(
       .where(eq(resumes.id, resumeId));
     // Best-effort baseline so the Skills page isn't empty after a failed analysis.
     await writeKeywordSkillBaseline(userId, text);
+    resumeLog("analysis_failed", { userId, resumeId, code, durationMs: Date.now() - startedAt });
     throw err;
   }
 
   await persistAnalysis(userId, resume.id, result.analysis, result.model, result.promptVersion);
+  resumeLog("analysis_completed", {
+    userId,
+    resumeId,
+    version: resume.version,
+    model: result.model,
+    durationMs: Date.now() - startedAt,
+  });
 
   await db
     .update(resumes)
@@ -434,6 +515,8 @@ const BRANCH_NAME = new Map(ENGINEERING_BRANCHES.map((b) => [b.slug, b.name]));
 
 export type ResumeCard = {
   id: string;
+  version: number;
+  isActive: boolean;
   fileName: string;
   status: ResumeStatus;
   errorMessage: string | null;
@@ -540,19 +623,42 @@ export type ResumeView = {
   discrepancies: Discrepancy[];
 };
 
-/** Latest resume + its analysis (if complete) + declared-vs-detected discrepancies. */
-export async function getResumeView(userId: string): Promise<ResumeView> {
-  const [resume] = await db
-    .select()
+/** Highest version number for this user (0 if they have no résumé yet). */
+async function activeVersion(userId: string): Promise<number> {
+  const [{ max } = { max: 0 }] = await db
+    .select({ max: sql<number>`coalesce(max(${resumes.version}), 0)` })
     .from(resumes)
-    .where(eq(resumes.userId, userId))
-    .orderBy(desc(resumes.createdAt))
-    .limit(1);
+    .where(eq(resumes.userId, userId));
+  return Number(max);
+}
+
+/**
+ * A résumé version + its analysis (if complete) + declared-vs-detected
+ * discrepancies. With no `resumeId` this returns the ACTIVE version (highest
+ * version number). `resumeId` is always owner-scoped — a foreign id yields the
+ * empty view, never another user's data.
+ */
+export async function getResumeView(userId: string, resumeId?: string): Promise<ResumeView> {
+  const [resume] = resumeId
+    ? await db
+        .select()
+        .from(resumes)
+        .where(and(eq(resumes.id, resumeId), eq(resumes.userId, userId)))
+        .limit(1)
+    : await db
+        .select()
+        .from(resumes)
+        .where(eq(resumes.userId, userId))
+        .orderBy(desc(resumes.version))
+        .limit(1);
 
   if (!resume) return { resume: null, analysis: null, discrepancies: [] };
 
+  const maxVersion = await activeVersion(userId);
   const base: ResumeCard = {
     id: resume.id,
+    version: resume.version,
+    isActive: resume.version === maxVersion,
     fileName: resume.fileName,
     status: resume.status as ResumeStatus,
     errorMessage: resume.errorMessage,
@@ -786,6 +892,74 @@ export async function getResumeFileForUser(
   if (!resume) return null;
   const bytes = await readResumeFile(resume.storageKey, userId);
   return { bytes, fileName: resume.fileName, mimeType: resume.mimeType };
+}
+
+// --- versioning ------------------------------------------------------------
+
+export type ResumeVersionCard = {
+  id: string;
+  version: number;
+  isActive: boolean;
+  fileName: string;
+  status: ResumeStatus;
+  errorMessage: string | null;
+  sizeBytes: number;
+  hasAnalysis: boolean;
+  uploadedAt: Date;
+  analyzedAt: Date | null;
+};
+
+/** All of a user's résumé versions, newest first. Scoped to `userId`. */
+export async function listResumeVersions(userId: string): Promise<ResumeVersionCard[]> {
+  const rows = await db
+    .select()
+    .from(resumes)
+    .where(eq(resumes.userId, userId))
+    .orderBy(desc(resumes.version));
+  if (rows.length === 0) return [];
+
+  const analysed = new Set(
+    (
+      await db
+        .selectDistinct({ resumeId: resumeAnalyses.resumeId })
+        .from(resumeAnalyses)
+        .where(eq(resumeAnalyses.userId, userId))
+    ).map((r) => r.resumeId),
+  );
+  const maxVersion = rows[0]!.version;
+
+  return rows.map((r) => ({
+    id: r.id,
+    version: r.version,
+    isActive: r.version === maxVersion,
+    fileName: r.fileName,
+    status: r.status as ResumeStatus,
+    errorMessage: r.errorMessage,
+    sizeBytes: r.sizeBytes,
+    hasAnalysis: analysed.has(r.id),
+    uploadedAt: r.createdAt,
+    analyzedAt: r.analyzedAt,
+  }));
+}
+
+/**
+ * Delete one résumé version the caller owns: its stored file + the row (which
+ * cascades to its analyses / skills / career signals). Other versions are
+ * untouched; the next-highest version simply becomes active. Returns `false`
+ * when the id isn't the caller's.
+ */
+export async function deleteResumeVersion(userId: string, resumeId: string): Promise<boolean> {
+  const [resume] = await db
+    .select()
+    .from(resumes)
+    .where(and(eq(resumes.id, resumeId), eq(resumes.userId, userId)))
+    .limit(1);
+  if (!resume) return false;
+
+  await deleteResumeFile(resume.storageKey);
+  await db.delete(resumes).where(and(eq(resumes.id, resumeId), eq(resumes.userId, userId)));
+  resumeLog("resume_deleted", { userId, resumeId, version: resume.version });
+  return true;
 }
 
 export { ResumeUploadError, ResumeAIError };

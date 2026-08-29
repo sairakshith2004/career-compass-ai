@@ -8,7 +8,11 @@
  * `.server.ts` — server-only.
  */
 
-export const RESUME_MAX_BYTES = Number(process.env["RESUME_MAX_BYTES"] ?? 5 * 1024 * 1024);
+const configuredMaxBytes = Number(process.env["RESUME_MAX_BYTES"]);
+export const RESUME_MAX_BYTES =
+  Number.isFinite(configuredMaxBytes) && configuredMaxBytes >= 64
+    ? Math.floor(configuredMaxBytes)
+    : 5 * 1024 * 1024;
 const MIN_BYTES = 64;
 
 export type ResumeFileKind = "pdf" | "docx";

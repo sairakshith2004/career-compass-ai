@@ -64,6 +64,13 @@
       "when": 1787891564102,
       "tag": "0008_charming_gambit",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1788022537856,
+      "tag": "0009_lowly_frightful_four",
+      "breakpoints": true
     }
   ]
 }
