@@ -155,7 +155,7 @@ function DangerZone() {
           <button
             onClick={() => setConfirming(true)}
             className="rounded-lg border border-destructive/50 px-4 py-2 text-sm font-medium text-destructive hover:bg-destructive/5"
-         >
+          >
             Delete account
           </button>
         ) : (

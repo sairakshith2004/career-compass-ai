@@ -1,7 +1,14 @@
 import { useState } from "react";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useMutation } from "@tanstack/react-query";
-import { Briefcase, CheckCircle2, XCircle, AlertTriangle, ChevronRight, BarChart3 } from "lucide-react";
+import {
+  Briefcase,
+  CheckCircle2,
+  XCircle,
+  AlertTriangle,
+  ChevronRight,
+  BarChart3,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { Panel, EmptyState, Badge } from "@/components/worklens/Panel";
@@ -111,10 +118,7 @@ function Jobs() {
       </Panel>
 
       {selectedJobId && (
-        <JobMatchDetail
-          jobId={selectedJobId}
-          onClose={() => setSelectedJobId(null)}
-        />
+        <JobMatchDetail jobId={selectedJobId} onClose={() => setSelectedJobId(null)} />
       )}
 
       <Panel title="Analyzed jobs">
@@ -145,7 +149,11 @@ function Jobs() {
                   {job.matchScore !== null ? (
                     <Badge
                       tone={
-                        job.matchScore >= 70 ? "success" : job.matchScore >= 40 ? "warning" : "muted"
+                        job.matchScore >= 70
+                          ? "success"
+                          : job.matchScore >= 40
+                            ? "warning"
+                            : "muted"
                       }
                     >
                       {job.matchScore}% match
@@ -193,7 +201,12 @@ function JobMatchDetail({ jobId, onClose }: { jobId: string; onClose: () => void
   if (!data) return null;
 
   const structured = data.structuredData as Record<string, unknown> | null;
-  const requiredSkills = (structured?.["requiredSkills"] as Array<{ name: string; category: string; severity: string }>) ?? [];
+  const requiredSkills =
+    (structured?.["requiredSkills"] as Array<{
+      name: string;
+      category: string;
+      severity: string;
+    }>) ?? [];
   const responsibilities = (structured?.["responsibilities"] as string[]) ?? [];
   const educationReqs = (structured?.["educationRequirements"] as string[]) ?? [];
   const experienceReqs = (structured?.["experienceRequirements"] as string[]) ?? [];
@@ -201,11 +214,27 @@ function JobMatchDetail({ jobId, onClose }: { jobId: string; onClose: () => void
   const summary = (structured?.["summary"] as string) ?? null;
 
   const scoreDimensions = [
-    { label: "Skills Match", score: data.matchSkillsScore, description: "Mandatory skills you have" },
+    {
+      label: "Skills Match",
+      score: data.matchSkillsScore,
+      description: "Mandatory skills you have",
+    },
     { label: "Experience", score: data.matchExperienceScore, description: "Experience level fit" },
-    { label: "Education", score: data.matchEducationScore, description: "Education requirement fit" },
-    { label: "Tools & Tech", score: data.matchToolsScore, description: "Cloud, DevOps, databases, tools" },
-    { label: "Keyword Coverage", score: data.matchKeywordsScore, description: "Overall JD keyword coverage" },
+    {
+      label: "Education",
+      score: data.matchEducationScore,
+      description: "Education requirement fit",
+    },
+    {
+      label: "Tools & Tech",
+      score: data.matchToolsScore,
+      description: "Cloud, DevOps, databases, tools",
+    },
+    {
+      label: "Keyword Coverage",
+      score: data.matchKeywordsScore,
+      description: "Overall JD keyword coverage",
+    },
   ];
 
   return (
@@ -298,10 +327,7 @@ function JobMatchDetail({ jobId, onClose }: { jobId: string; onClose: () => void
                   </p>
                   <div className="flex flex-wrap gap-1.5">
                     {skills.map((s) => (
-                      <Badge
-                        key={s.name}
-                        tone={severity === "mandatory" ? "primary" : "muted"}
-                      >
+                      <Badge key={s.name} tone={severity === "mandatory" ? "primary" : "muted"}>
                         {s.name}
                       </Badge>
                     ))}

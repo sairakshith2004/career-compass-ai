@@ -242,12 +242,7 @@ export const ASSESSMENTS_CATALOG: AssessmentDef[] = [
       {
         id: "react-2",
         prompt: "What should a React component return?",
-        options: [
-          "HTML strings",
-          "React elements (JSX)",
-          "DOM nodes directly",
-          "CSS styles",
-        ],
+        options: ["HTML strings", "React elements (JSX)", "DOM nodes directly", "CSS styles"],
         correctIndex: 1,
       },
       {
@@ -345,12 +340,7 @@ export const ASSESSMENTS_CATALOG: AssessmentDef[] = [
       {
         id: "rest-2",
         prompt: "What does HTTP status code 404 indicate?",
-        options: [
-          "Server error",
-          "Unauthorized",
-          "Not found",
-          "Bad request",
-        ],
+        options: ["Server error", "Unauthorized", "Not found", "Bad request"],
         correctIndex: 2,
       },
       {
@@ -366,7 +356,7 @@ export const ASSESSMENTS_CATALOG: AssessmentDef[] = [
       },
       {
         id: "rest-4",
-        prompt: "What makes an API \"RESTful\"?",
+        prompt: 'What makes an API "RESTful"?',
         options: [
           "It uses JSON",
           "It follows REST architectural constraints (stateless, resource-based URLs, etc.)",

@@ -69,13 +69,25 @@ function ProjectCard({
           <p className="mt-1 text-xs text-muted-foreground">{project.description}</p>
         </div>
         {project.matchScore !== undefined && (
-          <Badge tone={project.matchScore >= 60 ? "success" : project.matchScore >= 40 ? "primary" : "muted"}>
+          <Badge
+            tone={
+              project.matchScore >= 60 ? "success" : project.matchScore >= 40 ? "primary" : "muted"
+            }
+          >
             {project.matchScore}% match
           </Badge>
         )}
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        <Badge tone={project.difficulty === "advanced" ? "warning" : project.difficulty === "intermediate" ? "primary" : "success"}>
+        <Badge
+          tone={
+            project.difficulty === "advanced"
+              ? "warning"
+              : project.difficulty === "intermediate"
+                ? "primary"
+                : "success"
+          }
+        >
           {project.difficulty}
         </Badge>
         {project.estimatedHours && (
@@ -386,7 +398,10 @@ function ProjectCatalog({
     queryKey: ["catalog-projects", difficulty],
     queryFn: () =>
       listProjects({
-        data: { difficulty: (difficulty || undefined) as "beginner" | "intermediate" | "advanced" | undefined },
+        data: {
+          difficulty: (difficulty || undefined) as
+            "beginner" | "intermediate" | "advanced" | undefined,
+        },
       }),
   });
 
@@ -401,7 +416,9 @@ function ProjectCatalog({
   }
 
   if (!projects.data || projects.data.length === 0) {
-    return <EmptyState title="No projects found" description="Try a different difficulty filter." />;
+    return (
+      <EmptyState title="No projects found" description="Try a different difficulty filter." />
+    );
   }
 
   return (

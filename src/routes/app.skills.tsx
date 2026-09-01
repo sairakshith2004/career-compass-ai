@@ -16,11 +16,7 @@ import {
 } from "lucide-react";
 
 import { Panel, ScoreBar, Badge, EmptyState, Skeleton } from "@/components/worklens/Panel";
-import {
-  getUserSkills,
-  getSkillCategories,
-  getSkillHistory,
-} from "@/lib/server-fns";
+import { getUserSkills, getSkillCategories, getSkillHistory } from "@/lib/server-fns";
 import { requireResume } from "@/lib/route-guards";
 import { cn } from "@/lib/utils";
 
@@ -104,9 +100,7 @@ function SkillDetail({
               Verified: {levelLabel(skill.verifiedLevel)}
             </Badge>
           )}
-          {!hasVerified && currentLevel && (
-            <Badge tone="primary">{levelLabel(currentLevel)}</Badge>
-          )}
+          {!hasVerified && currentLevel && <Badge tone="primary">{levelLabel(currentLevel)}</Badge>}
         </div>
       </div>
 
@@ -143,12 +137,14 @@ function SkillDetail({
               Verified: {levelLabel(skill.verifiedLevel)}
             </span>
           )}
-          {claimedLevel && hasVerified && levelRank(skill.verifiedLevel) > levelRank(claimedLevel) && (
-            <span className="flex items-center gap-1 text-success">
-              <TrendingUp className="size-3" />
-              Assessment raised level
-            </span>
-          )}
+          {claimedLevel &&
+            hasVerified &&
+            levelRank(skill.verifiedLevel) > levelRank(claimedLevel) && (
+              <span className="flex items-center gap-1 text-success">
+                <TrendingUp className="size-3" />
+                Assessment raised level
+              </span>
+            )}
         </div>
       )}
 
@@ -226,10 +222,7 @@ function Skills() {
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [expandedHistory, setExpandedHistory] = useState<Set<string>>(new Set());
 
-  const categoryNames = useMemo(
-    () => categories.map((c) => c.name).sort(),
-    [categories],
-  );
+  const categoryNames = useMemo(() => categories.map((c) => c.name).sort(), [categories]);
 
   const filteredSkills = useMemo(() => {
     let result = skills;
@@ -237,8 +230,7 @@ function Skills() {
       const q = search.toLowerCase();
       result = result.filter(
         (s) =>
-          s.name.toLowerCase().includes(q) ||
-          (s.category && s.category.toLowerCase().includes(q)),
+          s.name.toLowerCase().includes(q) || (s.category && s.category.toLowerCase().includes(q)),
       );
     }
     if (categoryFilter) {
@@ -305,7 +297,10 @@ function Skills() {
               onChange={(e) => setSearch(e.target.value)}
             />
             {search && (
-              <button onClick={() => setSearch("")} className="text-muted-foreground hover:text-foreground">
+              <button
+                onClick={() => setSearch("")}
+                className="text-muted-foreground hover:text-foreground"
+              >
                 <X className="size-3.5" />
               </button>
             )}

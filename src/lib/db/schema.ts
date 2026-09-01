@@ -33,7 +33,11 @@ export type JDStructuredData = {
   /** Whether remote work is mentioned. */
   remote: boolean | null;
   /** Required skills categorized by type, each with severity. */
-  requiredSkills: { name: string; category: JDRequirementCategory; severity: JDRequirementSeverity }[];
+  requiredSkills: {
+    name: string;
+    category: JDRequirementCategory;
+    severity: JDRequirementSeverity;
+  }[];
   /** Education requirements (e.g. "BS in CS or equivalent"). */
   educationRequirements: string[];
   /** Experience requirements (e.g. "3+ years of experience"). */

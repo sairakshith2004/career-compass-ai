@@ -95,10 +95,7 @@ const WEIGHTS = {
 /**
  * Given a JD extraction and a user's skills/profile, compute the full match.
  */
-export async function computeMatch(
-  userId: string,
-  extraction: JDExtraction,
-): Promise<MatchResult> {
+export async function computeMatch(userId: string, extraction: JDExtraction): Promise<MatchResult> {
   await ensureSkillsSeeded();
 
   // 1. Resolve JD skills to catalog slugs and fetch student's skills.
@@ -164,7 +161,7 @@ export async function computeMatch(
   const preferredSkills = jdSkillEntries.filter((s) => s.severity === "preferred");
 
   let mandatoryMatched = 0;
-  let mandatoryTotal = mandatorySkills.length;
+  const mandatoryTotal = mandatorySkills.length;
   const skillDetails: SkillMatchDetail[] = [];
 
   for (const skill of mandatorySkills) {
@@ -200,7 +197,8 @@ export async function computeMatch(
       : mandatorySkills.length === 0 && preferredSkills.length > 0
         ? // No mandatory skills — score against preferred.
           Math.round(
-            (preferredSkills.filter((s) => s.catalogSlug && studentBySlug.has(s.catalogSlug)).length /
+            (preferredSkills.filter((s) => s.catalogSlug && studentBySlug.has(s.catalogSlug))
+              .length /
               preferredSkills.length) *
               100,
           )
@@ -227,8 +225,7 @@ export async function computeMatch(
         : 85; // No tools mentioned — assume reasonable default.
 
   // 4. Compute experience score.
-  const studentExpLevel =
-    latestResume?.experienceLevel ?? profileRow?.experienceLevel ?? null;
+  const studentExpLevel = latestResume?.experienceLevel ?? profileRow?.experienceLevel ?? null;
   const jdSeniority = extraction.seniority;
   let experienceScore: number;
   if (!jdSeniority) {
@@ -249,7 +246,11 @@ export async function computeMatch(
 
   // 5. Compute education score.
   // Simple: if the student has a degree, give full score. If not mentioned, full.
-  const educationScore = profileRow?.degree ? 95 : extraction.educationRequirements.length === 0 ? 90 : 70;
+  const educationScore = profileRow?.degree
+    ? 95
+    : extraction.educationRequirements.length === 0
+      ? 90
+      : 70;
 
   // 6. Compute keywords score (overall coverage of all mentioned skills, not just mandatory).
   const allSkillEntries = jdSkillEntries.filter((s) => s.catalogSlug);

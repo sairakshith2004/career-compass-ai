@@ -5,12 +5,7 @@ import { z } from "zod";
 
 import { db } from "./db/client";
 import { userSkills, skills } from "./db/schema";
-import {
-  projects,
-  projectSkills,
-  projectCareerRoles,
-  studentProjects,
-} from "./db/career-schema";
+import { projects, projectSkills, projectCareerRoles, studentProjects } from "./db/career-schema";
 import { readSessionUser } from "./session.server";
 import { ensureCareerFoundationSeeded } from "./db/seed";
 
@@ -19,11 +14,13 @@ import { ensureCareerFoundationSeeded } from "./db/seed";
  */
 export const listProjects = createServerFn({ method: "GET" })
   .validator(
-    z.object({
-      careerSlug: z.string().optional(),
-      skillSlug: z.string().optional(),
-      difficulty: z.enum(["beginner", "intermediate", "advanced"]).optional(),
-    }).optional(),
+    z
+      .object({
+        careerSlug: z.string().optional(),
+        skillSlug: z.string().optional(),
+        difficulty: z.enum(["beginner", "intermediate", "advanced"]).optional(),
+      })
+      .optional(),
   )
   .handler(async ({ data }) => {
     await ensureCareerFoundationSeeded();
@@ -53,73 +50,69 @@ export const listProjects = createServerFn({ method: "GET" })
  * Get project recommendations based on the user's skill gaps.
  * Recommends projects that develop skills the user is missing.
  */
-export const getProjectRecommendations = createServerFn({ method: "GET" }).handler(
-  async () => {
-    const session = await readSessionUser(getRequestHeaders());
-    if (!session) return [];
+export const getProjectRecommendations = createServerFn({ method: "GET" }).handler(async () => {
+  const session = await readSessionUser(getRequestHeaders());
+  if (!session) return [];
 
-    await ensureCareerFoundationSeeded();
+  await ensureCareerFoundationSeeded();
 
-    // Get user's current skill slugs
-    const userSkillRows = await db
-      .select({ skillId: userSkills.skillId })
-      .from(userSkills)
-      .where(eq(userSkills.userId, session.id));
+  // Get user's current skill slugs
+  const userSkillRows = await db
+    .select({ skillId: userSkills.skillId })
+    .from(userSkills)
+    .where(eq(userSkills.userId, session.id));
 
-    const userSkillIds = new Set(userSkillRows.map((r) => r.skillId));
+  const userSkillIds = new Set(userSkillRows.map((r) => r.skillId));
 
-    // Get all projects with their skill requirements
-    const allProjects = await db
-      .select({
-        id: projects.id,
-        slug: projects.slug,
-        title: projects.title,
-        description: projects.description,
-        difficulty: projects.difficulty,
-        technologies: projects.technologies,
-        estimatedHours: projects.estimatedHours,
-      })
-      .from(projects);
+  // Get all projects with their skill requirements
+  const allProjects = await db
+    .select({
+      id: projects.id,
+      slug: projects.slug,
+      title: projects.title,
+      description: projects.description,
+      difficulty: projects.difficulty,
+      technologies: projects.technologies,
+      estimatedHours: projects.estimatedHours,
+    })
+    .from(projects);
 
-    const projectSkillRows = await db
-      .select({
-        projectId: projectSkills.projectId,
-        skillId: projectSkills.skillId,
-      })
-      .from(projectSkills);
+  const projectSkillRows = await db
+    .select({
+      projectId: projectSkills.projectId,
+      skillId: projectSkills.skillId,
+    })
+    .from(projectSkills);
 
-    // Score each project: how many skills does the user already have vs need
-    const scored = allProjects.map((p) => {
-      const requiredSkills = projectSkillRows.filter((s) => s.projectId === p.id);
-      const userHas = requiredSkills.filter((s) => userSkillIds.has(s.skillId)).length;
-      const userNeeds = requiredSkills.length - userHas;
-      const coverage = requiredSkills.length > 0 ? userHas / requiredSkills.length : 0;
+  // Score each project: how many skills does the user already have vs need
+  const scored = allProjects.map((p) => {
+    const requiredSkills = projectSkillRows.filter((s) => s.projectId === p.id);
+    const userHas = requiredSkills.filter((s) => userSkillIds.has(s.skillId)).length;
+    const userNeeds = requiredSkills.length - userHas;
+    const coverage = requiredSkills.length > 0 ? userHas / requiredSkills.length : 0;
 
-      // Recommend projects where user has 30-70% coverage (challenging but feasible)
-      const score =
-        requiredSkills.length === 0
-          ? 50
-          : userNeeds > 0 && coverage >= 0.2 && coverage <= 0.8
-            ? 70 + Math.round(coverage * 30)
-            : coverage > 0.8
-              ? 40 // Too easy
-              : 20; // Too hard
+    // Recommend projects where user has 30-70% coverage (challenging but feasible)
+    const score =
+      requiredSkills.length === 0
+        ? 50
+        : userNeeds > 0 && coverage >= 0.2 && coverage <= 0.8
+          ? 70 + Math.round(coverage * 30)
+          : coverage > 0.8
+            ? 40 // Too easy
+            : 20; // Too hard
 
-      return {
-        ...p,
-        totalSkills: requiredSkills.length,
-        userHas,
-        userNeeds,
-        coverage: Math.round(coverage * 100),
-        matchScore: score,
-      };
-    });
+    return {
+      ...p,
+      totalSkills: requiredSkills.length,
+      userHas,
+      userNeeds,
+      coverage: Math.round(coverage * 100),
+      matchScore: score,
+    };
+  });
 
-    return scored
-      .sort((a, b) => b.matchScore - a.matchScore)
-      .slice(0, 12);
-  },
-);
+  return scored.sort((a, b) => b.matchScore - a.matchScore).slice(0, 12);
+});
 
 /**
  * Get the user's tracked projects (started/completed).
@@ -200,18 +193,18 @@ export const updateProject = createServerFn({ method: "POST" })
     const session = await readSessionUser(getRequestHeaders());
     if (!session) throw new Error("Not signed in");
 
-    const updates: Record<string, unknown> = { updatedAt: new Date() };
+    const updates: Partial<typeof studentProjects.$inferInsert> = { updatedAt: new Date() };
     if (data.status) {
-      updates["status"] = data.status;
-      if (data.status === "completed") updates["completedAt"] = new Date();
-      if (data.status === "in_progress" && !updates["startedAt"]) updates["startedAt"] = new Date();
+      updates.status = data.status;
+      if (data.status === "completed") updates.completedAt = new Date();
+      if (data.status === "in_progress" && !updates.startedAt) updates.startedAt = new Date();
     }
-    if (data.repoUrl !== undefined) updates["repoUrl"] = data.repoUrl || null;
-    if (data.notes !== undefined) updates["notes"] = data.notes;
+    if (data.repoUrl !== undefined) updates.repoUrl = data.repoUrl || null;
+    if (data.notes !== undefined) updates.notes = data.notes;
 
     await db
       .update(studentProjects)
-      .set(updates as any)
+      .set(updates)
       .where(and(eq(studentProjects.id, data.projectId), eq(studentProjects.userId, session.id)));
   });
 

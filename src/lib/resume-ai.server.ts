@@ -480,37 +480,35 @@ import { SKILLS_CATALOG } from "./skills-catalog";
 
 const SKILL_CATEGORY_MAP: Record<string, DetectedSkillT["category"]> = {};
 for (const s of SKILLS_CATALOG) {
-  SKILL_CATEGORY_MAP[s.slug] = (
-    {
-      Language: "language",
-      Frontend: "framework",
-      Backend: "framework",
-      "Data/ML": "ai_ml",
-      Database: "database",
-      Cloud: "cloud",
-      Concept: "concept",
-      Tools: "tool",
-      Security: "cybersecurity",
-      Embedded: "language",
-      Electronics: "language",
-      Electrical: "concept",
-      Mechanical: "tool",
-      Robotics: "tool",
-      Automotive: "concept",
-      Aerospace: "concept",
-      Civil: "concept",
-      Chemical: "concept",
-      "Biotechnology": "concept",
-      "Biomedical": "concept",
-      "Environmental": "concept",
-      "Materials": "concept",
-      "Petroleum": "concept",
-      "Instrumentation": "tool",
-      "Emerging Tech": "concept",
-      "Professional": "concept",
-      "Engineering Tools": "tool",
-    }[s.category] ?? "other"
-  ) as DetectedSkillT["category"];
+  SKILL_CATEGORY_MAP[s.slug] = ({
+    Language: "language",
+    Frontend: "framework",
+    Backend: "framework",
+    "Data/ML": "ai_ml",
+    Database: "database",
+    Cloud: "cloud",
+    Concept: "concept",
+    Tools: "tool",
+    Security: "cybersecurity",
+    Embedded: "language",
+    Electronics: "language",
+    Electrical: "concept",
+    Mechanical: "tool",
+    Robotics: "tool",
+    Automotive: "concept",
+    Aerospace: "concept",
+    Civil: "concept",
+    Chemical: "concept",
+    Biotechnology: "concept",
+    Biomedical: "concept",
+    Environmental: "concept",
+    Materials: "concept",
+    Petroleum: "concept",
+    Instrumentation: "tool",
+    "Emerging Tech": "concept",
+    Professional: "concept",
+    "Engineering Tools": "tool",
+  }[s.category] ?? "other") as DetectedSkillT["category"];
 }
 
 /** Check if the AI provider is actually configured with a usable key. */
@@ -557,7 +555,12 @@ export function fallbackAnalyzeResumeText(rawText: string): AnalyzeResult {
       category,
       evidenceStrength: count >= 3 ? "demonstrated" : count >= 2 ? "project_backed" : "mentioned",
       confidence,
-      evidence: [{ kind: "resume_mention", label: `Mentioned ${count} time${count > 1 ? "s" : ""} in resume` }],
+      evidence: [
+        {
+          kind: "resume_mention",
+          label: `Mentioned ${count} time${count > 1 ? "s" : ""} in resume`,
+        },
+      ],
     });
 
     // Categorize for flat lists
@@ -569,7 +572,8 @@ export function fallbackAnalyzeResumeText(rawText: string): AnalyzeResult {
     else if (catName === "Database") skillCategories.databases.push(catalogSkill.name);
     else if (catName === "Cloud") skillCategories.cloudTechnologies.push(catalogSkill.name);
     else if (catName === "Security") skillCategories.cybersecuritySkills.push(catalogSkill.name);
-    else if (catName === "Concept") skillCategories.softwareEngineeringSkills.push(catalogSkill.name);
+    else if (catName === "Concept")
+      skillCategories.softwareEngineeringSkills.push(catalogSkill.name);
     else if (catName === "Tools") skillCategories.tools.push(catalogSkill.name);
     else skillCategories.tools.push(catalogSkill.name);
   }

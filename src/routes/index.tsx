@@ -167,8 +167,8 @@ function Landing() {
             <Sparkles className="size-7" />
           </span>
           <h1 className="mx-auto mt-6 max-w-3xl text-4xl font-bold tracking-tight sm:text-5xl">
-            Understand your skills.{" "}
-            <span className="text-signal">Build your career</span> with evidence.
+            Understand your skills. <span className="text-signal">Build your career</span> with
+            evidence.
           </h1>
           <p className="mx-auto mt-5 max-w-2xl text-base text-muted-foreground sm:text-lg">
             WorkLens is an AI-powered career intelligence platform for engineering students. It
@@ -195,15 +195,13 @@ function Landing() {
       {/* ── What it does ─────────────────────────────────────── */}
       <section className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
         <div className="text-center">
-          <p className="text-sm font-semibold uppercase tracking-wide text-primary">
-            What it does
-          </p>
+          <p className="text-sm font-semibold uppercase tracking-wide text-primary">What it does</p>
           <h2 className="mt-3 text-3xl font-bold tracking-tight">
             A complete career intelligence platform
           </h2>
           <p className="mx-auto mt-3 max-w-2xl text-muted-foreground">
-            Every feature answers one question: <em>What should this student do next to become
-            job-ready?</em>
+            Every feature answers one question:{" "}
+            <em>What should this student do next to become job-ready?</em>
           </p>
         </div>
 
@@ -217,9 +215,7 @@ function Landing() {
                 <Icon className="size-5" />
               </div>
               <h3 className="mt-4 text-base font-semibold">{title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                {description}
-              </p>
+              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{description}</p>
             </div>
           ))}
         </div>

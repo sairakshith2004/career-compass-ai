@@ -39,9 +39,11 @@ const JD_CATEGORY = [
 const JDRequiredSkill = z.object({
   name: z.string().describe("Skill name as commonly understood, e.g. 'React', 'PostgreSQL'"),
   category: z.enum(JD_CATEGORY).describe("Which skill family this belongs to"),
-  severity: z.enum(JD_SEVERITY).describe(
-    "mandatory = explicitly required or deal-breaker; preferred = mentioned as nice-to-have; optional = mentioned but not important",
-  ),
+  severity: z
+    .enum(JD_SEVERITY)
+    .describe(
+      "mandatory = explicitly required or deal-breaker; preferred = mentioned as nice-to-have; optional = mentioned but not important",
+    ),
 });
 
 export const JDExtractionSchema = z.object({
@@ -74,10 +76,7 @@ export const JDExtractionSchema = z.object({
   domainKnowledge: z
     .array(z.string())
     .describe("Domain knowledge areas (e.g. 'fintech', 'distributed systems')"),
-  summary: z
-    .string()
-    .nullable()
-    .describe("Brief summary of what the role requires"),
+  summary: z.string().nullable().describe("Brief summary of what the role requires"),
 });
 
 export type JDExtraction = z.infer<typeof JDExtractionSchema>;
@@ -161,13 +160,24 @@ async function realParse(text: string) {
       { timeout: REQUEST_TIMEOUT_MS },
     );
   } catch (err) {
-    if (err instanceof Anthropic.APIConnectionTimeoutError || err instanceof Anthropic.APIUserAbortError) {
+    if (
+      err instanceof Anthropic.APIConnectionTimeoutError ||
+      err instanceof Anthropic.APIUserAbortError
+    ) {
       throw new JDParseError("timeout", "The analysis took too long. Please try again.", err);
     }
     if (err instanceof Anthropic.RateLimitError) {
-      throw new JDParseError("rate_limited", "The analysis service is busy. Please try again in a minute.", err);
+      throw new JDParseError(
+        "rate_limited",
+        "The analysis service is busy. Please try again in a minute.",
+        err,
+      );
     }
-    throw new JDParseError("provider_error", "The analysis service had a problem. Please try again.", err);
+    throw new JDParseError(
+      "provider_error",
+      "The analysis service had a problem. Please try again.",
+      err,
+    );
   }
 
   return {
@@ -190,7 +200,10 @@ export async function analyzeJobDescription(
 ): Promise<JDAnalyzeResult> {
   const text = rawText.trim().slice(0, MAX_JD_CHARS);
   if (text.length < 30) {
-    throw new JDParseError("too_short", "Job description is too short. Please paste the full posting.");
+    throw new JDParseError(
+      "too_short",
+      "Job description is too short. Please paste the full posting.",
+    );
   }
 
   const parse = deps.parse ?? realParse;
@@ -201,20 +214,33 @@ export async function analyzeJobDescription(
     parsed = await parse(text);
   } catch (err) {
     if (err instanceof JDParseError) throw err;
-    throw new JDParseError("provider_error", "The analysis service had a problem. Please try again.", err);
+    throw new JDParseError(
+      "provider_error",
+      "The analysis service had a problem. Please try again.",
+      err,
+    );
   }
 
   if (!parsed || typeof parsed !== "object") {
-    throw new JDParseError("malformed", "The analysis came back in an unexpected shape. Please try again.");
+    throw new JDParseError(
+      "malformed",
+      "The analysis came back in an unexpected shape. Please try again.",
+    );
   }
 
   const { extraction, stopReason, model, usage } = parsed;
 
   if (stopReason === "refusal") {
-    throw new JDParseError("refused", "We couldn't analyze that job description. Please try a different one.");
+    throw new JDParseError(
+      "refused",
+      "We couldn't analyze that job description. Please try a different one.",
+    );
   }
   if (extraction === null) {
-    throw new JDParseError("malformed", "The analysis came back in an unexpected shape. Please try again.");
+    throw new JDParseError(
+      "malformed",
+      "The analysis came back in an unexpected shape. Please try again.",
+    );
   }
 
   // Second-line validation: even structured output goes through Zod here.
@@ -224,7 +250,10 @@ export async function analyzeJobDescription(
       "[jd-intelligence] schema validation failed:",
       validated.error.issues.slice(0, 5).map((i) => ({ path: i.path.join("."), code: i.code })),
     );
-    throw new JDParseError("malformed", "The analysis came back in an unexpected shape. Please try again.");
+    throw new JDParseError(
+      "malformed",
+      "The analysis came back in an unexpected shape. Please try again.",
+    );
   }
 
   console.info("[jd-intelligence] extraction ok", {

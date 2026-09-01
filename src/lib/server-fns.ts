@@ -256,7 +256,12 @@ export const getSkillCategories = createServerFn({ method: "GET" }).handler(asyn
 
   for (const r of rows) {
     const cat = r.category ?? "Other";
-    const existing = categoryMap.get(cat) ?? { name: cat, skills: [], avgConfidence: 0, verifiedCount: 0 };
+    const existing = categoryMap.get(cat) ?? {
+      name: cat,
+      skills: [],
+      avgConfidence: 0,
+      verifiedCount: 0,
+    };
     existing.skills.push(r);
     categoryMap.set(cat, existing);
   }
@@ -335,8 +340,10 @@ export const getJobMatchDetails = createServerFn({ method: "GET" })
     const skillDetails = jobSkillRows.map((s) => ({
       name: s.name,
       category: s.category,
-      severity: s.requirement === "required" ? "mandatory" as const : "preferred" as const,
-      status: studentSlugs.has(s.name.toLowerCase().replace(/[^a-z0-9]/g, "-")) ? "match" as const : "gap" as const,
+      severity: s.requirement === "required" ? ("mandatory" as const) : ("preferred" as const),
+      status: studentSlugs.has(s.name.toLowerCase().replace(/[^a-z0-9]/g, "-"))
+        ? ("match" as const)
+        : ("gap" as const),
       studentLevel: null as string | null,
       studentConfidence: null as number | null,
     }));
@@ -375,7 +382,9 @@ export const analyzeJob = createServerFn({ method: "POST" })
     const userId = session.user.id;
 
     // Try AI-powered JD intelligence first.
-    let matchResult: Awaited<ReturnType<typeof import("./match-engine.server").computeMatch>> | null = null;
+    let matchResult: Awaited<
+      ReturnType<typeof import("./match-engine.server").computeMatch>
+    > | null = null;
     let extractionModel = "keyword-fallback";
 
     try {
@@ -389,7 +398,10 @@ export const analyzeJob = createServerFn({ method: "POST" })
       }
     } catch (err) {
       // AI analysis failed — fall through to keyword-only.
-      console.error("[analyzeJob] AI analysis failed, falling back to keyword:", (err as Error).message?.slice(0, 200));
+      console.error(
+        "[analyzeJob] AI analysis failed, falling back to keyword:",
+        (err as Error).message?.slice(0, 200),
+      );
     }
 
     if (matchResult) {
@@ -426,7 +438,20 @@ export const analyzeJob = createServerFn({ method: "POST" })
         ]),
       ];
       const catalogSkills = allSkillNames.length
-        ? await db.select({ id: skills.id, name: skills.name }).from(skills).where(inArray(skills.slug, allSkillNames.map((n) => n.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""))))
+        ? await db
+            .select({ id: skills.id, name: skills.name })
+            .from(skills)
+            .where(
+              inArray(
+                skills.slug,
+                allSkillNames.map((n) =>
+                  n
+                    .toLowerCase()
+                    .replace(/[^a-z0-9]+/g, "-")
+                    .replace(/^-|-$/g, ""),
+                ),
+              ),
+            )
         : [];
       const skillIdByName = new Map(catalogSkills.map((s) => [s.name.toLowerCase(), s.id]));
 

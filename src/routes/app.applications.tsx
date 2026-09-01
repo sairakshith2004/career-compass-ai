@@ -161,9 +161,7 @@ function ApplicationCard({
       <div className="mt-3 flex items-center gap-2">
         {canAdvance && nextStatusValue && (
           <button
-            onClick={() =>
-              onUpdate({ applicationId: app.id, status: nextStatusValue })
-            }
+            onClick={() => onUpdate({ applicationId: app.id, status: nextStatusValue })}
             className="inline-flex items-center gap-1 rounded-md border border-input px-2.5 py-1.5 text-xs font-medium hover:bg-muted"
           >
             Move to {STATUS_LABELS[nextStatusValue]}
