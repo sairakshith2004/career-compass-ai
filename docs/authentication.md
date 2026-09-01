@@ -42,7 +42,7 @@ never included in any API response or SSR payload.
 ### Password hashing — Argon2id
 
 `src/lib/password.ts`. Argon2id via the pure-WASM `hash-wasm` package (not a
-native addon) so the same code runs in Node, Bun and serverless/edge — the deploy
+native addon) so the same code runs in Node, edge and serverless — the deploy
 target is Vercel via Nitro, which bundles no native binaries. OWASP baseline
 parameters: 19 MiB memory, 2 iterations, parallelism 1, 16-byte salt, 32-byte
 hash. Stored as a self-describing PHC string so cost can be raised later without
@@ -143,7 +143,7 @@ behaviour and was left intact.
 
 ## Tests
 
-`bun test` — see `tests/auth.test.ts` (signup, duplicate email, invalid input,
+`npm test` — see `tests/auth.test.ts` (signup, duplicate email, invalid input,
 login, wrong password + enumeration parity, logout, `readSessionUser`
 authorization incl. suspended accounts, `lastLoginAt`, password-reset parity,
 Argon2id hashing/policy) and `tests/auth-rate-limit.test.ts` (429 after the

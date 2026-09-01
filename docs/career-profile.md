@@ -104,4 +104,4 @@ primary role + skills appear, with `requiredSkills` / `coveredRequiredSkills`
 populated; per-user isolation (a role slug can't reach another user's rows); every
 RPC rejects with no session.
 
-Full suite: **133 pass**. `bunx tsc` + `bun run lint` + `bun run build` clean.
+Full suite: **133 pass**. `npx tsc --noEmit` + `npm run lint` + `npm run build` clean.

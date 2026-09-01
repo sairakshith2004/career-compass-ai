@@ -78,6 +78,13 @@
       "when": 1788025021561,
       "tag": "0010_spotty_centennial",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1788115200000,
+      "tag": "0011_intelligent_jd_analysis",
+      "breakpoints": true
     }
   ]
 }

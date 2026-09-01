@@ -3,6 +3,55 @@ import { sqliteTable, text, integer, index, unique } from "drizzle-orm/sqlite-co
 
 import { user } from "./auth-schema";
 
+// --- Phase 7: JD Intelligence types ---------------------------------------
+
+export type JDRequirementCategory =
+  | "programming_language"
+  | "framework"
+  | "library"
+  | "database"
+  | "cloud"
+  | "devops"
+  | "tool"
+  | "concept"
+  | "soft_skill"
+  | "other";
+
+export type JDRequirementSeverity = "mandatory" | "preferred" | "optional";
+
+export type JDStructuredData = {
+  /** AI-extracted job title (may differ from what the user typed). */
+  extractedTitle: string | null;
+  /** AI-extracted company name. */
+  extractedCompany: string | null;
+  /** Seniority level inferred from the description. */
+  seniority: "entry" | "junior" | "mid" | "senior" | "lead" | null;
+  /** Employment type if mentioned. */
+  employmentType: "full_time" | "part_time" | "internship" | "contract" | null;
+  /** Location if mentioned. */
+  location: string | null;
+  /** Whether remote work is mentioned. */
+  remote: boolean | null;
+  /** Required skills categorized by type, each with severity. */
+  requiredSkills: { name: string; category: JDRequirementCategory; severity: JDRequirementSeverity }[];
+  /** Education requirements (e.g. "BS in CS or equivalent"). */
+  educationRequirements: string[];
+  /** Experience requirements (e.g. "3+ years of experience"). */
+  experienceRequirements: string[];
+  /** Key responsibilities extracted from the description. */
+  responsibilities: string[];
+  /** Soft skills mentioned in the posting. */
+  softSkills: string[];
+  /** Certifications mentioned (if any). */
+  certifications: string[];
+  /** Domain knowledge areas (e.g. "fintech", "distributed systems"). */
+  domainKnowledge: string[];
+  /** Brief AI summary of what the role requires. */
+  summary: string | null;
+  /** Scoring version for traceability. */
+  scoringVersion?: string;
+};
+
 const id = () =>
   text("id")
     .primaryKey()
@@ -602,8 +651,18 @@ export const jobs = sqliteTable("jobs", {
   status: text("status", { enum: ["pending", "analyzed", "failed"] })
     .notNull()
     .default("pending"),
-  matchScore: integer("match_score"), // 0-100, computed once skill matching lands
+  matchScore: integer("match_score"), // 0-100, overall job match score
   analyzedAt: integer("analyzed_at", { mode: "timestamp" }),
+  // Phase 7: AI-extracted structured JD data (skills by category, responsibilities,
+  // education/experience requirements, soft skills, etc.). Populated by jd-intelligence.server.ts.
+  structuredData: text("structured_data", { mode: "json" }).$type<JDStructuredData>(),
+  // Phase 7: multi-dimensional match scores (weights versioned in scoringVersion).
+  matchSkillsScore: integer("match_skills_score"), // 0-100
+  matchExperienceScore: integer("match_experience_score"), // 0-100
+  matchEducationScore: integer("match_education_score"), // 0-100
+  matchToolsScore: integer("match_tools_score"), // 0-100
+  matchKeywordsScore: integer("match_keywords_score"), // 0-100
+  scoringVersion: text("scoring_version"), // e.g. "2026-08-30.1"
   ...timestamps,
 });
 

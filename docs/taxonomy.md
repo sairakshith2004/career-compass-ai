@@ -121,13 +121,13 @@ still the full, branch-agnostic career list.
   unknown career → `null`.
 - **extensibility:** re-running the seed twice adds no duplicate rows.
 
-`bun test` — 49/49 across phases 1–3.
+`npm test` — 49/49 across phases 1–3.
 
 ## Manual checks
 
 ```bash
-bun run db:migrate && bun test
-bun dev   # http://localhost:3000
+npm run db:migrate && npm test
+npm run dev   # http://localhost:3000
 ```
 
 1. Sign up → onboarding → **step 2**: the branch dropdown is grouped —
@@ -138,7 +138,7 @@ bun dev   # http://localhost:3000
    choose "I have a few career options" → the career picker still offers the
    **full** list (Software, Data & AI, Hardware, Mechanical, Civil, …) — branch
    does not filter it.
-3. `bun run db:studio` → `branch_career_paths` has ~1029 rows;
+3. `npm run db:studio` → `branch_career_paths` has ~1029 rows;
    `select count(*) from branch_career_paths bcp join engineering_branches b on
 b.id = bcp.branch_id join careers c on c.id = bcp.career_id where c.slug =
 'software-engineer'` → 72 (reachable from every branch).

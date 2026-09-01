@@ -176,12 +176,12 @@ on, not worth a join table.
   only.
 - **auth:** onboarding RPCs reject with no session.
 
-Run: `bun test` (all 30 across Phase 1 + 2).
+Run: `npm test` (all 30 across Phase 1 + 2).
 
 ## Manual testing steps
 
 ```bash
-bun install && bun run db:migrate && bun dev   # http://localhost:3000
+npm install && npm run db:migrate && npm run dev   # http://localhost:3000
 ```
 
 1. **Unauthenticated:** open `/app/onboarding` in a private window →
@@ -205,7 +205,7 @@ bun install && bun run db:migrate && bun dev   # http://localhost:3000
    target-career badges. **Edit** reopens the wizard at step 1.
 10. **Ownership:** sign up a second account, complete a different profile, then
     switch back to the first — each dashboard shows only its own profile.
-    `bun run db:studio` → `student_profiles` has one row per `user_id`.
+    `npm run db:studio` → `student_profiles` has one row per `user_id`.
 
 ```
 

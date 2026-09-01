@@ -2,7 +2,7 @@
  * Phase 5 real end-to-end test. Runs the FULL pipeline against the REAL
  * Anthropic API — no stubbed AI. Requires ANTHROPIC_API_KEY in .env.
  *
- *   bun scripts/resume-live-e2e.ts
+ *   npx tsx scripts/resume-live-e2e.ts
  *
  * Prints only SAFE diagnostics (never the résumé text, the analysis body, or
  * any secret). Exits non-zero on failure.

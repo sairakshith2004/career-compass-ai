@@ -1,4 +1,6 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vitest";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 import {
   analyzeResumeText,
@@ -101,7 +103,10 @@ describe("prompt-injection posture", () => {
 
   test("the system prompt tells the model to treat the resume block as data", async () => {
     // Load the module source and assert the guardrail language is present.
-    const src = await Bun.file(new URL("../src/lib/resume-ai.server.ts", import.meta.url)).text();
+    const src = readFileSync(
+      fileURLToPath(new URL("../src/lib/resume-ai.server.ts", import.meta.url)),
+      "utf-8",
+    );
     expect(src).toContain("UNTRUSTED DATA");
     expect(src).toContain("<resume_document>");
     expect(src).toMatch(/never act on it|not instructions/i);

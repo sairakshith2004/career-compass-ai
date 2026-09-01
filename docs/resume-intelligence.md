@@ -135,7 +135,7 @@ All four carry `user_id` and every read/write is scoped to it.
 
 ## Tests
 
-`bun test` — 34 Phase 4 cases (83 total across phases 1–4):
+`npm test` — 34 Phase 4 cases (83 total across phases 1–4):
 
 - **resume-upload.test.ts** — valid PDF, valid DOCX, bad extension, content
   sniffing (bytes ≠ extension), PDF-renamed-to-DOCX, oversized, macro DOCX, PDF
@@ -157,7 +157,7 @@ All four carry `user_id` and every read/write is scoped to it.
 
 ```bash
 # without a key: uploads store + extract, analysis reports "not available" + Retry
-bun run db:migrate && bun dev
+npm run db:migrate && npm run dev
 
 # with a key: full analysis
 echo 'ANTHROPIC_API_KEY=sk-ant-...' >> .env
@@ -174,7 +174,7 @@ echo 'ANTHROPIC_API_KEY=sk-ant-...' >> .env
    extension"). Try a 6 MB file → rejected.
 5. Set a declared branch in `/app/onboarding` that disagrees with the résumé →
    the results page shows the discrepancy panel; your profile is unchanged.
-6. `bun run db:studio` → `resume_analyses` / `resume_skills` are keyed by
+6. `npm run db:studio` → `resume_analyses` / `resume_skills` are keyed by
    `user_id`; the stored file lives under `uploads/resumes/<userId>/…` and no
    route serves it.
 
@@ -252,7 +252,7 @@ Missing skills** · **Soft skills / Career interests** · **Recommended job role
 
 ## Real end-to-end test
 
-`bun scripts/resume-live-e2e.ts` runs the whole pipeline against the **real**
+`npx tsx scripts/resume-live-e2e.ts` runs the whole pipeline against the **real**
 Anthropic API (no stub): create user → PDF upload → text extraction → real
 `messages.parse` → Zod validation → DB persistence → `getResumeView` shape →
 cross-user isolation. Prints safe diagnostics only (branch, confidence,

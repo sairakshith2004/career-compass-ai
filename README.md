@@ -22,7 +22,9 @@ Built for engineering students across **every branch** — not just CSE.
 | **Résumé intelligence** | Upload a PDF/DOCX → validate + malware-scan → store privately → extract text → send to Claude for a **structured** analysis → validate the AI output against a schema → persist. Detects engineering branch (with evidence + an uncertainty flag), skills grouped into 12 families with per-skill evidence strength, projects, experience, education, certifications, job-readiness, and recommended roles. Each new upload is a **new version** — old analyses are kept. |
 | **Declared vs detected** | The résumé analysis is *never* written onto the declared profile. Disagreements (e.g. "you declared Mechanical, your résumé reads ECE") are surfaced as a review panel that changes nothing. |
 | **Career profile & target job** | Pick target roles from any branch, mark one **primary**, set preferred industries / job types / work mode / locations. Produces a clean, self-contained input set (`getPhase7Inputs`) for the skill-gap engine: the primary role, its skill requirements, and your current skills. |
-| **Skills / Roadmap / Assessments / Jobs / Projects / Applications** | Additional app sections that consume the data above (skill gap engine, a deterministic learning roadmap, an assessment catalog, job-description analysis, project recommendations). |
+| **Job Description Intelligence** | Paste a job description → AI extracts structured requirements (skills categorized as mandatory/preferred/optional, education, experience, responsibilities, soft skills, certifications, domain knowledge) → store as structured data. Falls back to keyword-only when no AI key is configured. |
+| **Resume ↔ Job Matching Engine** | Multi-dimensional scoring: Skills Match (35%), Experience (20%), Tools (15%), Education (10%), Keyword Coverage (20%). Per-skill match/partial/gap status. Transparent, versioned scoring logic — AI extracts/classifies, backend computes ALL scores. |
+| **Skills / Roadmap / Assessments / Jobs / Projects / Applications** | Additional app sections that consume the data above (skill gap engine, a deterministic learning roadmap, an assessment catalog, job-description analysis with structured breakdowns, project recommendations). |
 
 The product loop: **Analyze → Measure → Choose a target → Learn → Build → Verify → Re-measure.**
 
@@ -46,6 +48,23 @@ Browser (React 19)
    ▼
 Drizzle ORM  →  libSQL / SQLite   (dev: local dev.db file · prod: Turso)
 ```
+
+### JD Intelligence + Match Engine (Phase 7)
+
+```
+User pastes Job Description
+   ▼
+jd-intelligence.server.ts    AI extracts structured requirements (Claude + Zod)
+   ▼
+match-engine.server.ts       Multi-dimensional scoring against student profile
+   ▼
+jobs table                   Stores: structuredData (JSON), match scores per dimension, scoringVersion
+   ▼
+UI                           Shows: overall match %, per-dimension breakdown, skill-by-skill status
+```
+
+The AI only *classifies* — the backend computes ALL scores using transparent,
+versioned scoring logic. AI-generated percentages are never stored as scores.
 
 Three rules keep this honest:
 
@@ -88,8 +107,7 @@ only** (never résumé text or secrets).
 | Tool | Version | Why |
 | --- | --- | --- |
 | **TypeScript** | 5.8, `strict` + `noUncheckedIndexedAccess` + `exactOptionalPropertyTypes` | end-to-end type safety, client ↔ server ↔ DB |
-| **Bun** | 1.4 | package manager, script runner **and** test runner — one tool, fast |
-| **Node** | 24 (compatible) | Bun is primary; the build output runs on standard Node/serverless |
+| **Node** | 22+ | package manager, script runner, and test runner |
 
 ### Frontend
 
@@ -121,18 +139,26 @@ only** (never résumé text or secrets).
 
 | Tool | Purpose |
 | --- | --- |
-| **[Anthropic Claude](https://docs.anthropic.com)** (`@anthropic-ai/sdk`) | résumé analysis. Default model `claude-opus-5` (override with `RESUME_AI_MODEL`) |
-| **`messages.parse` + `zodOutputFormat`** | structured output constrained to a schema |
+| **[Anthropic Claude](https://docs.anthropic.com)** (`@anthropic-ai/sdk`) | résumé analysis + JD intelligence. Default model `claude-opus-5` (override with `RESUME_AI_MODEL`) |
+| **`messages.parse` + `zodOutputFormat`** | structured output constrained to a Zod schema |
 | **pdf-parse** / **mammoth** | server-side PDF / DOCX text extraction |
 
 The Anthropic key is read from `process.env` on the server only — it is never
 sent to the browser, never logged, and never stored (only `model` /
 `promptVersion` / token counts are persisted, for auditing).
 
+**Résumé analysis** extracts: branch detection, skills (12 families with evidence
+strength), projects, experience, education, certifications, job-readiness, and
+career recommendations — all validated against a Zod schema before persistence.
+
+**JD intelligence** extracts: skills categorized as mandatory/preferred/optional,
+education requirements, experience requirements, responsibilities, soft skills,
+certifications, and domain knowledge — also validated against a Zod schema.
+
 ### Tooling
 
 ESLint 9 + `typescript-eslint` + `eslint-plugin-prettier` · Prettier ·
-`bun test` (the pipeline runs `tsc --noEmit`, `eslint`, `bun test`, `vite build`
+`npm test` (the pipeline runs `tsc --noEmit`, `eslint`, `vitest run`, `vite build`
 after every phase).
 
 ### Deliberately **not** used
@@ -156,10 +182,6 @@ each phase inspects what's there and extends it.
 | **1 — Auth & security foundation** | email/password + OAuth, session gating, rate limiting, secure headers / CSP / HSTS in production |
 | **2 — Student profile** | onboarding wizard, `student_profiles`, career-interest areas, profile-completion score, one-shot update API |
 | **3 — Engineering & career taxonomy** | `engineering_categories` / `engineering_branches` / `careers` / `branch_career_paths` / `career_skill_requirements`, all seeded from `taxonomy-catalog.ts` |
-| **4/5 — Résumé intelligence** | upload → validate/scan → extract → **structured Claude analysis** → persist; evidence-based skills; declared-vs-detected discrepancies; **résumé versioning** (history preserved) |
-| **6 — Career profile & target job** | preferred industries / job types / work mode / locations; **primary target role**; `getPhase7Inputs` — the clean hand-off to the skill-gap engine |
-| **(next)** | skill-gap engine + adaptive roadmap wired to the primary target role |
-
 `docs/` holds a one-file write-up per area
 (`authentication.md`, `student-profile.md`, `taxonomy.md`,
 `resume-intelligence.md`, `career-journey.md`, `career-profile.md`).
@@ -181,6 +203,8 @@ src/
 ├── lib/
 │   ├── *-fns.ts            RPC wrappers — requireUser() → delegate
 │   ├── *.server.ts         business logic — explicit userId, DB access, never client-imported
+│   ├── jd-intelligence.server.ts   AI-powered JD structured extraction
+│   ├── match-engine.server.ts      multi-dimensional resume↔job scoring
 │   ├── *-catalog.ts        reference data (skills, taxonomy, industries, degrees, …)
 │   ├── auth.ts / session.server.ts   better-auth config + "who is the caller"
 │   └── db/
@@ -196,22 +220,22 @@ src/
 │
 drizzle/                    generated SQL migrations + snapshots
 docs/                       per-feature design write-ups
-tests/                      bun test suites (auth, profile, taxonomy, resume, career, …)
+tests/                      vitest test suites (auth, profile, taxonomy, resume, career, …)
 ```
 
 ---
 
 ## Running it locally
 
-You need **[Bun](https://bun.sh)** (`curl -fsSL https://bun.sh/install | bash`).
+You need **[Node.js](https://nodejs.org)** (v22 or later) and npm.
 
 ```sh
 git clone <this-repo-url>
 cd career-compass-ai
-bun install
+npm install
 cp .env.example .env       # optional — the app runs with none of it set
-bun run db:migrate         # creates dev.db with every table
-bun run dev                # http://localhost:3000
+npm run db:migrate         # creates dev.db with every table
+npm run dev                # http://localhost:3000
 ```
 
 With an empty `.env`: sign-up/login with email+password works, the whole app
@@ -222,15 +246,15 @@ you add `ANTHROPIC_API_KEY=sk-ant-…`.
 ### Scripts
 
 ```sh
-bun run dev          # dev server
-bun run build        # production build (Nitro output)
-bun run preview      # serve the production build locally
-bun test             # run the full test suite
-bun run lint         # eslint
-bun run format       # prettier --write
-bun run db:generate  # generate a migration from schema changes
-bun run db:migrate   # apply pending migrations
-bun run db:studio    # browse the DB in Drizzle Studio
+npm run dev          # dev server
+npm run build        # production build (Nitro output)
+npm run preview      # serve the production build locally
+npm test             # run the full test suite
+npm run lint         # eslint
+npm run format       # prettier --write
+npm run db:generate  # generate a migration from schema changes
+npm run db:migrate   # apply pending migrations
+npm run db:studio    # browse the DB in Drizzle Studio
 ```
 
 ### Environment variables
@@ -266,7 +290,7 @@ All optional for local dev; see `.env.example` for where to get each one.
 
 ## Testing
 
-`bun test` runs the full suite against a throwaway database that every migration
+`npm test` (vitest) runs the full suite against a throwaway database that every migration
 is applied to from scratch — so a green run also proves the migration chain.
 Coverage spans auth & rate-limiting, onboarding & profile, taxonomy, the résumé
 pipeline (validation, extraction, AI success/failure/retry, versioning,

@@ -297,8 +297,74 @@ export const listJobs = createServerFn({ method: "GET" }).handler(async () => {
 });
 
 /**
- * Scans a pasted job description for catalog skills and scores it against the
- * member's resume-derived skills: matchScore = matched / required, both keyword-based.
+ * Get detailed match results for a specific job.
+ */
+export const getJobMatchDetails = createServerFn({ method: "GET" })
+  .validator(z.object({ jobId: z.string().min(1) }))
+  .handler(async ({ data }) => {
+    const session = await auth.api.getSession({ headers: getRequestHeaders() });
+    if (!session?.user) return null;
+
+    const [job] = await db
+      .select()
+      .from(jobs)
+      .where(and(eq(jobs.id, data.jobId), eq(jobs.userId, session.user.id)))
+      .limit(1);
+    if (!job) return null;
+
+    // Resolve skills for this job.
+    const jobSkillRows = await db
+      .select({
+        name: skills.name,
+        category: skills.category,
+        requirement: jobSkills.requirement,
+      })
+      .from(jobSkills)
+      .innerJoin(skills, eq(skills.id, jobSkills.skillId))
+      .where(eq(jobSkills.jobId, job.id));
+
+    // Get student skills for status computation.
+    const studentSkillRows = await db
+      .select({ skillSlug: skills.slug, currentLevel: userSkills.currentLevel })
+      .from(userSkills)
+      .innerJoin(skills, eq(skills.id, userSkills.skillId))
+      .where(eq(userSkills.userId, session.user.id));
+    const studentSlugs = new Set(studentSkillRows.map((r) => r.skillSlug));
+    const studentLevels = new Map(studentSkillRows.map((r) => [r.skillSlug, r.currentLevel]));
+
+    const skillDetails = jobSkillRows.map((s) => ({
+      name: s.name,
+      category: s.category,
+      severity: s.requirement === "required" ? "mandatory" as const : "preferred" as const,
+      status: studentSlugs.has(s.name.toLowerCase().replace(/[^a-z0-9]/g, "-")) ? "match" as const : "gap" as const,
+      studentLevel: null as string | null,
+      studentConfidence: null as number | null,
+    }));
+
+    return {
+      id: job.id,
+      title: job.title,
+      company: job.company,
+      rawDescription: job.rawDescription,
+      status: job.status,
+      matchScore: job.matchScore,
+      matchSkillsScore: job.matchSkillsScore,
+      matchExperienceScore: job.matchExperienceScore,
+      matchEducationScore: job.matchEducationScore,
+      matchToolsScore: job.matchToolsScore,
+      matchKeywordsScore: job.matchKeywordsScore,
+      scoringVersion: job.scoringVersion,
+      structuredData: job.structuredData,
+      analyzedAt: job.analyzedAt,
+      skillDetails,
+    };
+  });
+
+/**
+ * Phase 7: AI-powered job analysis. Sends the JD to Claude for structured extraction,
+ * computes multi-dimensional match scores, and stores everything.
+ *
+ * Falls back to keyword-only analysis if no AI key is configured.
  */
 export const analyzeJob = createServerFn({ method: "POST" })
   .validator(jobInput)
@@ -306,6 +372,90 @@ export const analyzeJob = createServerFn({ method: "POST" })
     const session = await auth.api.getSession({ headers: getRequestHeaders() });
     if (!session?.user) throw new Error("Not signed in");
 
+    const userId = session.user.id;
+
+    // Try AI-powered JD intelligence first.
+    let matchResult: Awaited<ReturnType<typeof import("./match-engine.server").computeMatch>> | null = null;
+    let extractionModel = "keyword-fallback";
+
+    try {
+      const { analyzeJobDescription, isAIConfigured } = await import("./jd-intelligence.server");
+      if (isAIConfigured()) {
+        const { extraction, model } = await analyzeJobDescription(data.rawDescription);
+        extractionModel = model;
+        const { computeMatch, SCORING_VERSION } = await import("./match-engine.server");
+        matchResult = await computeMatch(userId, extraction);
+        matchResult.structuredData.scoringVersion = SCORING_VERSION;
+      }
+    } catch (err) {
+      // AI analysis failed — fall through to keyword-only.
+      console.error("[analyzeJob] AI analysis failed, falling back to keyword:", (err as Error).message?.slice(0, 200));
+    }
+
+    if (matchResult) {
+      // AI-powered path: store structured data + multi-dimensional scores.
+      const { structuredData, scores, matchingSkills, missingSkills } = matchResult;
+      structuredData.scoringVersion = extractionModel; // store model for traceability
+      const [job] = await db
+        .insert(jobs)
+        .values({
+          userId,
+          title: data.title || structuredData.extractedTitle || null,
+          company: data.company || structuredData.extractedCompany || null,
+          rawDescription: data.rawDescription,
+          status: "analyzed",
+          matchScore: scores.overallScore,
+          matchSkillsScore: scores.skillsScore,
+          matchExperienceScore: scores.experienceScore,
+          matchEducationScore: scores.educationScore,
+          matchToolsScore: scores.toolsScore,
+          matchKeywordsScore: scores.keywordsScore,
+          scoringVersion: extractionModel,
+          structuredData: structuredData as unknown as import("./db/schema").JDStructuredData,
+          analyzedAt: new Date(),
+        })
+        .returning();
+
+      // Store skills in job_skills table.
+      await ensureSkillsSeeded();
+      const allSkillNames = [
+        ...new Set([
+          ...structuredData.requiredSkills.map((s) => s.name),
+          ...matchingSkills,
+          ...missingSkills,
+        ]),
+      ];
+      const catalogSkills = allSkillNames.length
+        ? await db.select({ id: skills.id, name: skills.name }).from(skills).where(inArray(skills.slug, allSkillNames.map((n) => n.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""))))
+        : [];
+      const skillIdByName = new Map(catalogSkills.map((s) => [s.name.toLowerCase(), s.id]));
+
+      const skillRows = structuredData.requiredSkills
+        .filter((s) => {
+          const id = skillIdByName.get(s.name.toLowerCase());
+          return Boolean(id);
+        })
+        .map((s) => ({
+          jobId: job!.id,
+          skillId: skillIdByName.get(s.name.toLowerCase())!,
+          requirement: s.severity === "mandatory" ? ("required" as const) : ("preferred" as const),
+        }));
+
+      if (skillRows.length > 0) {
+        await db.insert(jobSkills).values(skillRows);
+      }
+
+      return {
+        id: job!.id,
+        matchScore: scores.overallScore,
+        skillsFound: structuredData.requiredSkills.length,
+        aiPowered: true,
+        structuredData,
+        scores,
+      };
+    }
+
+    // Fallback: keyword-only analysis (no AI key).
     await ensureSkillsSeeded();
     const skillSlugs = extractSkillSlugs(data.rawDescription);
 
@@ -316,7 +466,7 @@ export const analyzeJob = createServerFn({ method: "POST" })
     const resumeSkillRows = await db
       .select({ skillId: userSkills.skillId })
       .from(userSkills)
-      .where(and(eq(userSkills.userId, session.user.id), eq(userSkills.source, "resume")));
+      .where(and(eq(userSkills.userId, userId), eq(userSkills.source, "resume")));
     const resumeSkillIds = new Set(resumeSkillRows.map((r) => r.skillId));
 
     const matchScore = requiredSkills.length
@@ -329,7 +479,7 @@ export const analyzeJob = createServerFn({ method: "POST" })
     const [job] = await db
       .insert(jobs)
       .values({
-        userId: session.user.id,
+        userId,
         title: data.title || null,
         company: data.company || null,
         rawDescription: data.rawDescription,
@@ -349,7 +499,7 @@ export const analyzeJob = createServerFn({ method: "POST" })
       );
     }
 
-    return { id: job!.id, matchScore, skillsFound: requiredSkills.length };
+    return { id: job!.id, matchScore, skillsFound: requiredSkills.length, aiPowered: false };
   });
 
 /**

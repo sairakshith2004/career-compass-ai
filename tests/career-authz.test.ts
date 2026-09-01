@@ -1,4 +1,4 @@
-import { describe, expect, test, beforeAll } from "bun:test";
+import { describe, expect, test, beforeAll } from "vitest";
 import { eq } from "drizzle-orm";
 
 import { setupTestAuth, callAuth } from "./helpers";
