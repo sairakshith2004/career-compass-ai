@@ -1,12 +1,16 @@
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 import { db } from "./db/client";
-import { jobs, jobSkills, skills, resumes, userSkills, studentProfiles } from "./db/schema";
-import { resumes as resumesTable, resumeSkills, resumeAnalyses } from "./db/schema";
-import { careers, engineeringBranches } from "./db/schema";
-import { matchSkillSlug, matchBranchSlug } from "./resume-matching";
+import {
+  skills,
+  userSkills,
+  studentProfiles,
+  resumes as resumesTable,
+  resumeAnalyses,
+} from "./db/schema";
+import { matchSkillSlug } from "./resume-matching";
 import { ensureSkillsSeeded } from "./db/seed";
-import type { JDExtraction } from "./jd-intelligence.server";
+import type { JDExtraction, JDRequiredSkill } from "./jd-intelligence.server";
 import type { JDStructuredData, JDRequirementSeverity } from "./db/schema";
 
 /**
@@ -14,15 +18,18 @@ import type { JDStructuredData, JDRequirementSeverity } from "./db/schema";
  * profile/resume and a parsed job description.
  *
  * The AI extracts and classifies information from the JD. The backend computes
- * ALL scores using transparent, versioned scoring logic. AI-generated percentages
- * are never stored as match scores.
+ * ALL scores here using transparent, versioned scoring logic. AI-generated
+ * percentages are never stored as match scores.
  *
- * Scoring version is stored with each analysis so results remain auditable.
+ * `SCORING_VERSION` is stored with each analysis (`jobs.scoring_version`) so a
+ * result can always be traced back to the exact weights/logic that produced it.
+ * Bump it whenever the weights or any dimension formula below changes.
  *
- * `.server.ts` — always called with a `userId` from the verified session.
+ * `.server.ts` — every entry point takes a `userId` resolved from the verified
+ * session; nothing here trusts a client-supplied id.
  */
 
-export const SCORING_VERSION = "2026-08-30.1";
+export const SCORING_VERSION = "2026-09-02.1";
 
 // --- Score types -------------------------------------------------------------
 
@@ -41,11 +48,15 @@ export type MatchDimensionScores = {
   overallScore: number;
 };
 
+export type SkillMatchStatus = "match" | "partial" | "gap";
+
 export type SkillMatchDetail = {
   name: string;
   category: string;
   severity: JDRequirementSeverity;
-  status: "match" | "partial" | "gap";
+  status: SkillMatchStatus;
+  /** The catalog slug this JD skill resolved to, or null when uncatalogued. */
+  catalogSlug: string | null;
   studentLevel: string | null;
   studentConfidence: number | null;
 };
@@ -68,22 +79,20 @@ const EXPERIENCE_ORDER: Record<string, number> = {
   student: 0,
   internship: 1,
   junior: 2,
+  entry: 2,
   mid: 3,
   senior: 4,
   lead: 5,
 };
 
-// --- The scoring logic -------------------------------------------------------
-
-/**
- * Compute all match dimensions. The weights are configurable per-scoring-version
- * but hardcoded here for now:
- *   - skills:      35% (most important — can the person do the job?)
- *   - tools:       15% (cloud, devops, databases, tools)
- *   - experience:  20%
- *   - education:   10%
- *   - keywords:    20% (overall keyword coverage across the JD)
- */
+// --- Weights ----------------------------------------------------------------
+//
+// Configurable per scoring version; hardcoded for the current one:
+//   - skills:      35% (most important — can the person do the job?)
+//   - tools:       15% (cloud, devops, databases, tools)
+//   - experience:  20%
+//   - education:   10%
+//   - keywords:    20% (overall keyword coverage across the JD)
 const WEIGHTS = {
   skills: 0.35,
   tools: 0.15,
@@ -92,23 +101,34 @@ const WEIGHTS = {
   keywords: 0.2,
 } as const;
 
+const clamp = (n: number) => Math.max(0, Math.min(100, Math.round(n)));
+
+// --- Student skill context (shared) ----------------------------------------
+
+type StudentSkill = {
+  level: string | null;
+  confidence: number | null;
+  verified: boolean;
+  source: string;
+};
+
+export type StudentMatchContext = {
+  /** catalog slug → best signal the student has for that skill */
+  bySlug: Map<string, StudentSkill>;
+  hasDegree: boolean;
+  experienceLevel: string | null;
+};
+
 /**
- * Given a JD extraction and a user's skills/profile, compute the full match.
+ * Load everything the match engine needs about a student: their merged skill
+ * signals (verified beats claimed beats resume-derived), whether they have a
+ * degree, and their experience level (resume analysis first, declared profile
+ * second). Used by both `computeMatch` and `computeSkillMatchDetails`.
  */
-export async function computeMatch(userId: string, extraction: JDExtraction): Promise<MatchResult> {
-  await ensureSkillsSeeded();
-
-  // 1. Resolve JD skills to catalog slugs and fetch student's skills.
-  const jdSkillEntries = extraction.requiredSkills.map((s) => ({
-    ...s,
-    catalogSlug: matchSkillSlug(s.name),
-  }));
-
+export async function loadStudentMatchContext(userId: string): Promise<StudentMatchContext> {
   const [studentSkillRows, profileRow, latestResume] = await Promise.all([
-    // Student's skills from all sources (resume + assessment).
     db
       .select({
-        skillId: userSkills.skillId,
         currentLevel: userSkills.currentLevel,
         verifiedLevel: userSkills.verifiedLevel,
         claimedLevel: userSkills.claimedLevel,
@@ -119,14 +139,12 @@ export async function computeMatch(userId: string, extraction: JDExtraction): Pr
       .from(userSkills)
       .innerJoin(skills, eq(skills.id, userSkills.skillId))
       .where(eq(userSkills.userId, userId)),
-    // Student profile for experience/education comparison.
     db
       .select()
       .from(studentProfiles)
       .where(eq(studentProfiles.userId, userId))
       .limit(1)
       .then((rows) => rows[0] ?? null),
-    // Latest resume analysis for experience level.
     db
       .select({ experienceLevel: resumeAnalyses.aiExperienceLevel })
       .from(resumeAnalyses)
@@ -137,150 +155,178 @@ export async function computeMatch(userId: string, extraction: JDExtraction): Pr
       .then((rows) => rows[0] ?? null),
   ]);
 
-  // Build a quick lookup: catalogSlug → student skill info.
-  const studentBySlug = new Map<
-    string,
-    { level: string | null; confidence: number | null; source: string }
-  >();
+  const bySlug = new Map<string, StudentSkill>();
   for (const row of studentSkillRows) {
-    const slug = row.skillSlug;
-    const existing = studentBySlug.get(slug);
-    // Prefer verified > current > claimed.
     const level = row.verifiedLevel ?? row.currentLevel ?? row.claimedLevel ?? null;
-    if (!existing || (level && !existing.level)) {
-      studentBySlug.set(slug, {
-        level: level ?? null,
+    const verified = row.verifiedLevel != null;
+    const existing = bySlug.get(row.skillSlug);
+    // Keep the strongest signal: a verified row always wins; otherwise the first
+    // row that actually carries a level.
+    if (!existing || (verified && !existing.verified) || (level && !existing.level)) {
+      bySlug.set(row.skillSlug, {
+        level,
         confidence: row.confidence ?? null,
+        verified,
         source: row.source ?? "resume",
       });
     }
   }
 
-  // 2. Compute skills score (mandatory skills only).
-  const mandatorySkills = jdSkillEntries.filter((s) => s.severity === "mandatory");
-  const preferredSkills = jdSkillEntries.filter((s) => s.severity === "preferred");
+  return {
+    bySlug,
+    hasDegree: Boolean(profileRow?.degree),
+    experienceLevel: latestResume?.experienceLevel ?? profileRow?.experienceLevel ?? null,
+  };
+}
 
-  let mandatoryMatched = 0;
-  const mandatoryTotal = mandatorySkills.length;
-  const skillDetails: SkillMatchDetail[] = [];
+/**
+ * Classify how well the student covers one JD skill:
+ *   - match:   has it, verified OR resume/claimed with reasonable confidence
+ *   - partial: has it, but only weak resume/AI-inferred evidence (low confidence,
+ *              not verified) — the "◐" state in the UI
+ *   - gap:     no signal at all
+ */
+function classify(student: StudentSkill | undefined): SkillMatchStatus {
+  if (!student || !student.level) return "gap";
+  if (student.verified) return "match";
+  if ((student.confidence ?? 0) < 40) return "partial";
+  return "match";
+}
 
-  for (const skill of mandatorySkills) {
-    const studentSkill = skill.catalogSlug ? studentBySlug.get(skill.catalogSlug) : null;
-    const status = studentSkill?.level ? "match" : "gap";
-    if (status === "match") mandatoryMatched++;
-    skillDetails.push({
-      name: skill.name,
-      category: skill.category,
-      severity: skill.severity,
-      status,
-      studentLevel: studentSkill?.level ?? null,
-      studentConfidence: studentSkill?.confidence ?? null,
+/**
+ * Build per-skill match details for a list of JD skills against a loaded student
+ * context. Pure — no DB access — so it can be reused by the detail endpoint,
+ * which re-derives current status every time skills change.
+ */
+export function buildSkillDetails(
+  requiredSkills: JDRequiredSkill[],
+  ctx: StudentMatchContext,
+): SkillMatchDetail[] {
+  const sevOrder: Record<string, number> = { mandatory: 0, preferred: 1, optional: 2 };
+  return requiredSkills
+    .map((skill) => {
+      const catalogSlug = matchSkillSlug(skill.name);
+      const student = catalogSlug ? ctx.bySlug.get(catalogSlug) : undefined;
+      return {
+        name: skill.name,
+        category: skill.category,
+        severity: skill.severity,
+        status: classify(student),
+        catalogSlug,
+        studentLevel: student?.level ?? null,
+        studentConfidence: student?.confidence ?? null,
+      };
+    })
+    .sort((a, b) => {
+      const sv = (sevOrder[a.severity] ?? 3) - (sevOrder[b.severity] ?? 3);
+      if (sv !== 0) return sv;
+      const rank = { gap: 0, partial: 1, match: 2 } as const;
+      return rank[a.status] - rank[b.status];
     });
-  }
+}
 
-  for (const skill of preferredSkills) {
-    const studentSkill = skill.catalogSlug ? studentBySlug.get(skill.catalogSlug) : null;
-    const status = studentSkill?.level ? "match" : "gap";
-    skillDetails.push({
-      name: skill.name,
-      category: skill.category,
-      severity: skill.severity,
-      status,
-      studentLevel: studentSkill?.level ?? null,
-      studentConfidence: studentSkill?.confidence ?? null,
-    });
-  }
+/**
+ * Re-derive per-skill match status for an already-analyzed job. Called by
+ * `getJobMatchDetails` so the breakdown always reflects the student's *current*
+ * skills, not what they had the day the JD was analyzed.
+ */
+export async function computeSkillMatchDetails(
+  userId: string,
+  requiredSkills: JDRequiredSkill[],
+): Promise<SkillMatchDetail[]> {
+  await ensureSkillsSeeded();
+  const ctx = await loadStudentMatchContext(userId);
+  return buildSkillDetails(requiredSkills, ctx);
+}
 
+// --- The scoring logic -----------------------------------------------------
+
+const ratio = (matched: number, total: number) =>
+  total > 0 ? Math.round((matched / total) * 100) : null;
+
+/**
+ * Given a JD extraction and a user's skills/profile, compute the full match.
+ */
+export async function computeMatch(userId: string, extraction: JDExtraction): Promise<MatchResult> {
+  await ensureSkillsSeeded();
+
+  const ctx = await loadStudentMatchContext(userId);
+  const has = (slug: string | null) => Boolean(slug && ctx.bySlug.get(slug)?.level);
+
+  const skillDetails = buildSkillDetails(extraction.requiredSkills, ctx);
+
+  const mandatory = skillDetails.filter((d) => d.severity === "mandatory");
+  const preferred = skillDetails.filter((d) => d.severity === "preferred");
+  const covered = (d: SkillMatchDetail) => d.status === "match" || d.status === "partial";
+
+  // 1. Skills score — mandatory coverage, falling back to preferred, then 100.
   const skillsScore =
-    mandatoryTotal > 0
-      ? Math.round((mandatoryMatched / mandatoryTotal) * 100)
-      : mandatorySkills.length === 0 && preferredSkills.length > 0
-        ? // No mandatory skills — score against preferred.
-          Math.round(
-            (preferredSkills.filter((s) => s.catalogSlug && studentBySlug.has(s.catalogSlug))
-              .length /
-              preferredSkills.length) *
-              100,
-          )
-        : 100; // No skills mentioned at all.
+    mandatory.length > 0
+      ? ratio(mandatory.filter(covered).length, mandatory.length)!
+      : preferred.length > 0
+        ? ratio(preferred.filter(covered).length, preferred.length)!
+        : 100;
 
-  // 3. Compute tools score (cloud + devops + database + tool categories).
+  // 2. Tools score — cloud / devops / database / tool categories.
   const toolCategories = new Set(["cloud", "devops", "database", "tool"]);
-  const toolSkills = jdSkillEntries.filter((s) => toolCategories.has(s.category));
-  const mandatoryTools = toolSkills.filter((s) => s.severity === "mandatory");
+  const toolDetails = skillDetails.filter((d) => toolCategories.has(d.category));
+  const mandatoryTools = toolDetails.filter((d) => d.severity === "mandatory");
   const toolsScore =
     mandatoryTools.length > 0
-      ? Math.round(
-          (mandatoryTools.filter((s) => s.catalogSlug && studentBySlug.has(s.catalogSlug)).length /
-            mandatoryTools.length) *
-            100,
-        )
-      : // If no explicit tool skills, check if any tool-category skills exist at all.
-        toolSkills.length > 0
-        ? Math.round(
-            (toolSkills.filter((s) => s.catalogSlug && studentBySlug.has(s.catalogSlug)).length /
-              toolSkills.length) *
-              100,
-          )
-        : 85; // No tools mentioned — assume reasonable default.
+      ? ratio(mandatoryTools.filter(covered).length, mandatoryTools.length)!
+      : toolDetails.length > 0
+        ? ratio(toolDetails.filter(covered).length, toolDetails.length)!
+        : 85;
 
-  // 4. Compute experience score.
-  const studentExpLevel = latestResume?.experienceLevel ?? profileRow?.experienceLevel ?? null;
+  // 3. Experience score.
   const jdSeniority = extraction.seniority;
   let experienceScore: number;
   if (!jdSeniority) {
-    experienceScore = 80; // No seniority mentioned — assume flexible.
-  } else if (!studentExpLevel) {
-    experienceScore = 50; // Student hasn't indicated experience.
+    experienceScore = 80;
+  } else if (!ctx.experienceLevel) {
+    experienceScore = 50;
   } else {
-    const studentRank = EXPERIENCE_ORDER[studentExpLevel] ?? 0;
-    const requiredRank = EXPERIENCE_ORDER[jdSeniority] ?? 0;
-    // If student meets or exceeds requirement → high score.
-    // If 1 level below → partial. 2+ levels below → low.
-    const diff = requiredRank - studentRank;
+    const diff =
+      (EXPERIENCE_ORDER[jdSeniority] ?? 0) - (EXPERIENCE_ORDER[ctx.experienceLevel] ?? 0);
     if (diff <= 0) experienceScore = 100;
     else if (diff === 1) experienceScore = 60;
     else if (diff === 2) experienceScore = 30;
     else experienceScore = 15;
   }
 
-  // 5. Compute education score.
-  // Simple: if the student has a degree, give full score. If not mentioned, full.
-  const educationScore = profileRow?.degree
+  // 4. Education score.
+  const educationScore = ctx.hasDegree
     ? 95
     : extraction.educationRequirements.length === 0
       ? 90
       : 70;
 
-  // 6. Compute keywords score (overall coverage of all mentioned skills, not just mandatory).
-  const allSkillEntries = jdSkillEntries.filter((s) => s.catalogSlug);
-  const matchedCount = allSkillEntries.filter((s) => studentBySlug.has(s.catalogSlug!)).length;
+  // 5. Keywords score — coverage of every catalogued skill mentioned anywhere.
+  const catalogued = skillDetails.filter((d) => d.catalogSlug);
   const keywordsScore =
-    allSkillEntries.length > 0 ? Math.round((matchedCount / allSkillEntries.length) * 100) : 80;
+    catalogued.length > 0
+      ? ratio(catalogued.filter((d) => has(d.catalogSlug)).length, catalogued.length)!
+      : 80;
 
-  // 7. Compute weighted overall score.
+  // 6. Weighted overall.
   const overallScore = clamp(
-    Math.round(
-      skillsScore * WEIGHTS.skills +
-        toolsScore * WEIGHTS.tools +
-        experienceScore * WEIGHTS.experience +
-        educationScore * WEIGHTS.education +
-        keywordsScore * WEIGHTS.keywords,
-    ),
+    skillsScore * WEIGHTS.skills +
+      toolsScore * WEIGHTS.tools +
+      experienceScore * WEIGHTS.experience +
+      educationScore * WEIGHTS.education +
+      keywordsScore * WEIGHTS.keywords,
   );
 
-  // 8. Collect missing/matching skill names.
+  // 7. Matching / missing skill names (mandatory + preferred only).
   const matchingSkills: string[] = [];
   const missingSkills: string[] = [];
-  for (const detail of skillDetails) {
-    if (detail.status === "match") {
-      matchingSkills.push(detail.name);
-    } else if (detail.severity === "mandatory" || detail.severity === "preferred") {
-      missingSkills.push(detail.name);
-    }
+  for (const d of skillDetails) {
+    if (d.severity === "optional") continue;
+    if (d.status === "gap") missingSkills.push(d.name);
+    else matchingSkills.push(d.name);
   }
 
-  // 9. Build structured data for persistence.
+  // 8. Structured data for persistence — stamped with the scoring version.
   const structuredData: JDStructuredData = {
     extractedTitle: extraction.extractedTitle,
     extractedCompany: extraction.extractedCompany,
@@ -296,6 +342,7 @@ export async function computeMatch(userId: string, extraction: JDExtraction): Pr
     certifications: extraction.certifications,
     domainKnowledge: extraction.domainKnowledge,
     summary: extraction.summary,
+    scoringVersion: SCORING_VERSION,
   };
 
   return {
@@ -307,19 +354,9 @@ export async function computeMatch(userId: string, extraction: JDExtraction): Pr
       keywordsScore,
       overallScore,
     },
-    skillDetails: skillDetails.sort((a, b) => {
-      // Mandatory first, then preferred. Within same severity, gap before match.
-      const sevOrder: Record<string, number> = { mandatory: 0, preferred: 1, optional: 2 };
-      const sv = (sevOrder[a.severity] ?? 3) - (sevOrder[b.severity] ?? 3);
-      if (sv !== 0) return sv;
-      if (a.status === "gap" && b.status !== "gap") return -1;
-      if (a.status !== "gap" && b.status === "gap") return 1;
-      return 0;
-    }),
+    skillDetails,
     missingSkills,
     matchingSkills,
     structuredData,
-  } as const;
+  };
 }
-
-const clamp = (n: number) => Math.max(0, Math.min(100, Math.round(n)));

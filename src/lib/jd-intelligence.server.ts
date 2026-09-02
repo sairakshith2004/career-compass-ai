@@ -36,7 +36,7 @@ const JD_CATEGORY = [
   "other",
 ] as const;
 
-const JDRequiredSkill = z.object({
+const JDRequiredSkillSchema = z.object({
   name: z.string().describe("Skill name as commonly understood, e.g. 'React', 'PostgreSQL'"),
   category: z.enum(JD_CATEGORY).describe("Which skill family this belongs to"),
   severity: z
@@ -45,6 +45,9 @@ const JDRequiredSkill = z.object({
       "mandatory = explicitly required or deal-breaker; preferred = mentioned as nice-to-have; optional = mentioned but not important",
     ),
 });
+
+/** One extracted JD requirement — the unit the match engine scores against. */
+export type JDRequiredSkill = z.infer<typeof JDRequiredSkillSchema>;
 
 export const JDExtractionSchema = z.object({
   extractedTitle: z.string().nullable().describe("Job title extracted from the posting"),
@@ -60,7 +63,7 @@ export const JDExtractionSchema = z.object({
   location: z.string().nullable().describe("Location if mentioned"),
   remote: z.boolean().nullable().describe("Whether remote work is available"),
   requiredSkills: z
-    .array(JDRequiredSkill)
+    .array(JDRequiredSkillSchema)
     .describe("All skills mentioned, categorized by type and severity"),
   educationRequirements: z
     .array(z.string())

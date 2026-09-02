@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   Briefcase,
   CheckCircle2,
+  CircleDashed,
   XCircle,
-  AlertTriangle,
   ChevronRight,
   BarChart3,
 } from "lucide-react";
@@ -118,7 +118,11 @@ function Jobs() {
       </Panel>
 
       {selectedJobId && (
-        <JobMatchDetail jobId={selectedJobId} onClose={() => setSelectedJobId(null)} />
+        <JobMatchDetail
+          key={selectedJobId}
+          jobId={selectedJobId}
+          onClose={() => setSelectedJobId(null)}
+        />
       )}
 
       <Panel title="Analyzed jobs">
@@ -177,18 +181,12 @@ function Jobs() {
 type JobMatchData = Awaited<ReturnType<typeof getJobMatchDetails>>;
 
 function JobMatchDetail({ jobId, onClose }: { jobId: string; onClose: () => void }) {
-  const [data, setData] = useState<JobMatchData>(null);
-  const [loading, setLoading] = useState(true);
-
-  // Fetch on mount.
-  useState(() => {
-    getJobMatchDetails({ data: { jobId } }).then((result) => {
-      setData(result);
-      setLoading(false);
-    });
+  const { data, isPending } = useQuery({
+    queryKey: ["job-match", jobId],
+    queryFn: () => getJobMatchDetails({ data: { jobId } }),
   });
 
-  if (loading) {
+  if (isPending) {
     return (
       <Panel title="Loading match details…">
         <div className="flex items-center justify-center py-8">
@@ -200,18 +198,13 @@ function JobMatchDetail({ jobId, onClose }: { jobId: string; onClose: () => void
 
   if (!data) return null;
 
-  const structured = data.structuredData as Record<string, unknown> | null;
-  const requiredSkills =
-    (structured?.["requiredSkills"] as Array<{
-      name: string;
-      category: string;
-      severity: string;
-    }>) ?? [];
-  const responsibilities = (structured?.["responsibilities"] as string[]) ?? [];
-  const educationReqs = (structured?.["educationRequirements"] as string[]) ?? [];
-  const experienceReqs = (structured?.["experienceRequirements"] as string[]) ?? [];
-  const softSkills = (structured?.["softSkills"] as string[]) ?? [];
-  const summary = (structured?.["summary"] as string) ?? null;
+  const structured = data.structuredData;
+  const skillDetails = data.skillDetails;
+  const responsibilities = structured?.responsibilities ?? [];
+  const educationReqs = structured?.educationRequirements ?? [];
+  const experienceReqs = structured?.experienceRequirements ?? [];
+  const softSkills = structured?.softSkills ?? [];
+  const summary = structured?.summary ?? null;
 
   const scoreDimensions = [
     {
@@ -310,32 +303,55 @@ function JobMatchDetail({ jobId, onClose }: { jobId: string; onClose: () => void
         </div>
       )}
 
-      {/* Skills by Severity */}
-      {requiredSkills.length > 0 && (
+      {/* Per-skill match — the "what do I have / what am I missing" view */}
+      {skillDetails.length > 0 && (
         <div className="mb-6">
           <h3 className="mb-3 text-sm font-semibold text-foreground">
-            Required Skills ({requiredSkills.length})
+            Skill Match ({skillDetails.filter((s) => s.status === "match").length}/
+            {skillDetails.length})
           </h3>
           <div className="space-y-2">
             {(["mandatory", "preferred"] as const).map((severity) => {
-              const skills = requiredSkills.filter((s) => s.severity === severity);
-              if (skills.length === 0) return null;
+              const group = skillDetails.filter((s) => s.severity === severity);
+              if (group.length === 0) return null;
               return (
                 <div key={severity}>
                   <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     {severity === "mandatory" ? "Must Have" : "Nice to Have"}
                   </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {skills.map((s) => (
-                      <Badge key={s.name} tone={severity === "mandatory" ? "primary" : "muted"}>
-                        {s.name}
-                      </Badge>
+                  <ul className="space-y-1">
+                    {group.map((s) => (
+                      <li key={s.name} className="flex items-center justify-between gap-2 text-sm">
+                        <span className="flex items-center gap-2">
+                          {s.status === "match" ? (
+                            <CheckCircle2 className="size-4 shrink-0 text-green-600" />
+                          ) : s.status === "partial" ? (
+                            <CircleDashed className="size-4 shrink-0 text-amber-600" />
+                          ) : (
+                            <XCircle className="size-4 shrink-0 text-red-600" />
+                          )}
+                          <span className={s.status === "gap" ? "text-muted-foreground" : ""}>
+                            {s.name}
+                          </span>
+                        </span>
+                        {s.studentLevel && (
+                          <span className="text-xs text-muted-foreground">
+                            you: {s.studentLevel}
+                          </span>
+                        )}
+                      </li>
                     ))}
-                  </div>
+                  </ul>
                 </div>
               );
             })}
           </div>
+          {!data.aiPowered && (
+            <p className="mt-2 text-[10px] text-muted-foreground">
+              Keyword-only match — add an <code>ANTHROPIC_API_KEY</code> for full AI extraction
+              (severity, responsibilities, experience & education requirements).
+            </p>
+          )}
         </div>
       )}
 
@@ -396,7 +412,7 @@ function JobMatchDetail({ jobId, onClose }: { jobId: string; onClose: () => void
 
       {data.scoringVersion && (
         <p className="mt-4 text-[10px] text-muted-foreground">
-          Scoring model: {data.scoringVersion}
+          Scoring version: {data.scoringVersion}
         </p>
       )}
     </Panel>
