@@ -26,6 +26,7 @@ import { Route as AppResumeRouteImport } from './routes/app.resume'
 import { Route as AppRoadmapRouteImport } from './routes/app.roadmap'
 import { Route as AppSettingsRouteImport } from './routes/app.settings'
 import { Route as AppSkillsRouteImport } from './routes/app.skills'
+import { Route as AppTutorialsRouteImport } from './routes/app.tutorials'
 import { Route as ApiAuthSplatRouteImport } from './routes/api.auth.$'
 
 const IndexRoute = IndexRouteImport.update({
@@ -113,6 +114,11 @@ const AppSkillsRoute = AppSkillsRouteImport.update({
   path: '/skills',
   getParentRoute: () => AppRoute,
 } as any)
+const AppTutorialsRoute = AppTutorialsRouteImport.update({
+  id: '/tutorials',
+  path: '/tutorials',
+  getParentRoute: () => AppRoute,
+} as any)
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   id: '/api/auth/$',
   path: '/api/auth/$',
@@ -136,6 +142,7 @@ export interface FileRoutesByFullPath {
   '/app/roadmap': typeof AppRoadmapRoute
   '/app/settings': typeof AppSettingsRoute
   '/app/skills': typeof AppSkillsRoute
+  '/app/tutorials': typeof AppTutorialsRoute
   '/app/': typeof AppIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
@@ -155,6 +162,7 @@ export interface FileRoutesByTo {
   '/app/roadmap': typeof AppRoadmapRoute
   '/app/settings': typeof AppSettingsRoute
   '/app/skills': typeof AppSkillsRoute
+  '/app/tutorials': typeof AppTutorialsRoute
   '/app': typeof AppIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
@@ -176,6 +184,7 @@ export interface FileRoutesById {
   '/app/roadmap': typeof AppRoadmapRoute
   '/app/settings': typeof AppSettingsRoute
   '/app/skills': typeof AppSkillsRoute
+  '/app/tutorials': typeof AppTutorialsRoute
   '/app/': typeof AppIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
@@ -198,6 +207,7 @@ export interface FileRouteTypes {
     | '/app/roadmap'
     | '/app/settings'
     | '/app/skills'
+    | '/app/tutorials'
     | '/app/'
     | '/api/auth/$'
   fileRoutesByTo: FileRoutesByTo
@@ -217,6 +227,7 @@ export interface FileRouteTypes {
     | '/app/roadmap'
     | '/app/settings'
     | '/app/skills'
+    | '/app/tutorials'
     | '/app'
     | '/api/auth/$'
   id:
@@ -237,6 +248,7 @@ export interface FileRouteTypes {
     | '/app/roadmap'
     | '/app/settings'
     | '/app/skills'
+    | '/app/tutorials'
     | '/app/'
     | '/api/auth/$'
   fileRoutesById: FileRoutesById
@@ -372,6 +384,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSkillsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/tutorials': {
+      id: '/app/tutorials'
+      path: '/tutorials'
+      fullPath: '/app/tutorials'
+      preLoaderRoute: typeof AppTutorialsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/api/auth/$': {
       id: '/api/auth/$'
       path: '/api/auth/$'
@@ -393,6 +412,7 @@ interface AppRouteChildren {
   AppRoadmapRoute: typeof AppRoadmapRoute
   AppSettingsRoute: typeof AppSettingsRoute
   AppSkillsRoute: typeof AppSkillsRoute
+  AppTutorialsRoute: typeof AppTutorialsRoute
   AppIndexRoute: typeof AppIndexRoute
 }
 
@@ -407,6 +427,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppRoadmapRoute: AppRoadmapRoute,
   AppSettingsRoute: AppSettingsRoute,
   AppSkillsRoute: AppSkillsRoute,
+  AppTutorialsRoute: AppTutorialsRoute,
   AppIndexRoute: AppIndexRoute,
 }
 

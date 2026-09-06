@@ -9,6 +9,7 @@ import {
   resumeAnalyses,
 } from "./db/schema";
 import { matchSkillSlug } from "./resume-matching";
+import { tutorialSearchUrl } from "./tutorials-catalog";
 import { ensureSkillsSeeded } from "./db/seed";
 import type { JDExtraction, JDRequiredSkill } from "./jd-intelligence.server";
 import type { JDStructuredData, JDRequirementSeverity } from "./db/schema";
@@ -59,6 +60,8 @@ export type SkillMatchDetail = {
   catalogSlug: string | null;
   studentLevel: string | null;
   studentConfidence: number | null;
+  /** YouTube course search for this skill — always present, useful when status ≠ match. */
+  tutorialUrl: string;
 };
 
 export type MatchResult = {
@@ -215,6 +218,7 @@ export function buildSkillDetails(
         catalogSlug,
         studentLevel: student?.level ?? null,
         studentConfidence: student?.confidence ?? null,
+        tutorialUrl: tutorialSearchUrl(skill.name, student?.level ? "intermediate" : "beginner"),
       };
     })
     .sort((a, b) => {

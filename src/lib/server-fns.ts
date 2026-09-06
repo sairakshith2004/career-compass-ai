@@ -30,6 +30,7 @@ import { levelFromScore } from "./career-levels";
 import { getPrimaryGoal } from "./career.server";
 import { recomputeSkillGaps } from "./skill-gap-engine.server";
 import { getActivity, type ActivityEntry } from "./activity.server";
+import { tutorialSearchUrl } from "./tutorials-catalog";
 
 /** Which social login buttons the login page should render. No secrets leave the server. */
 export const getEnabledProviders = createServerFn({ method: "GET" }).handler(
@@ -700,6 +701,8 @@ export const generateRoadmap = createServerFn({ method: "POST" }).handler(async 
       week: i + 1,
       topic: g.name,
       status: (i === 0 ? "active" : "todo") as "active" | "todo",
+      // A "watch this first" YouTube course for the week's skill.
+      resourceUrl: tutorialSearchUrl(g.name, "beginner"),
     })),
   );
 

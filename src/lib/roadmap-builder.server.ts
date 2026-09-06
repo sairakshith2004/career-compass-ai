@@ -11,6 +11,7 @@ import {
 } from "./db/career-schema";
 import { recomputeSkillGaps, type SkillGapRow } from "./skill-gap-engine.server";
 import { severityRank } from "./career-levels";
+import { tutorialSearchUrl } from "./tutorials-catalog";
 import { recordActivity } from "./activity.server";
 import { ensureCareerFoundationSeeded } from "./db/seed";
 
@@ -63,6 +64,7 @@ function tasksForGap(gap: SkillGapRow, startOrder: number) {
     estimatedMinutes: number;
     priority: number;
     skillId: string;
+    resourceUrl: string | null;
   }[] = [];
   out.push({
     title: `Learn ${gap.skillName} fundamentals`,
@@ -72,6 +74,7 @@ function tasksForGap(gap: SkillGapRow, startOrder: number) {
     estimatedMinutes: 120,
     priority: gap.priority,
     skillId: gap.skillId,
+    resourceUrl: tutorialSearchUrl(gap.skillName, "beginner"),
   });
   out.push({
     title: `Practice ${gap.skillName} with focused exercises`,
@@ -81,6 +84,7 @@ function tasksForGap(gap: SkillGapRow, startOrder: number) {
     estimatedMinutes: 90,
     priority: gap.priority,
     skillId: gap.skillId,
+    resourceUrl: tutorialSearchUrl(gap.skillName, "intermediate"),
   });
   if (severityRank(gap.severity) >= 3) {
     out.push({
@@ -91,6 +95,7 @@ function tasksForGap(gap: SkillGapRow, startOrder: number) {
       estimatedMinutes: 300,
       priority: gap.priority,
       skillId: gap.skillId,
+      resourceUrl: tutorialSearchUrl(gap.skillName, "advanced"),
     });
   }
   return out;
@@ -187,6 +192,7 @@ export async function buildTemplateRoadmap(
           estimatedMinutes: t.estimatedMinutes,
           priority: t.priority,
           skillId: t.skillId,
+          resourceUrl: t.resourceUrl,
         });
         taskCount++;
       }

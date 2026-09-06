@@ -17,6 +17,7 @@ import {
 
 import { Panel, ScoreBar, Badge, EmptyState, Skeleton } from "@/components/worklens/Panel";
 import { getUserSkills, getSkillCategories, getSkillHistory } from "@/lib/server-fns";
+import { tutorialsForSkill, LEVEL_META } from "@/lib/tutorials-catalog";
 import { requireResume } from "@/lib/route-guards";
 import { cn } from "@/lib/utils";
 
@@ -164,6 +165,31 @@ function SkillDetail({
           </div>
         </div>
       )}
+
+      {/* Tutorials — YouTube courses for this skill */}
+      {(() => {
+        const tutorials = tutorialsForSkill(skill.slug);
+        if (tutorials.length === 0) return null;
+        return (
+          <div className="mt-3">
+            <p className="text-xs font-medium text-muted-foreground">Tutorials</p>
+            <div className="mt-1 flex flex-wrap gap-1.5">
+              {tutorials.map((t) => (
+                <a
+                  key={t.level}
+                  href={t.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={`Search YouTube: ${t.query}`}
+                  className="inline-flex items-center gap-1 rounded-md border border-input px-2 py-0.5 text-xs hover:bg-muted"
+                >
+                  {LEVEL_META[t.level].label} ↗
+                </a>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* History toggle */}
       <button

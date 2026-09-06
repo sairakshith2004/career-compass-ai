@@ -24,6 +24,7 @@ Built for engineering students across **every branch** — not just CSE.
 | **Career profile & target job** | Pick target roles from any branch, mark one **primary**, set preferred industries / job types / work mode / locations. Produces a clean, self-contained input set (`getPhase7Inputs`) for the skill-gap engine: the primary role, its skill requirements, and your current skills. |
 | **Job Description Intelligence** | Paste a job description → AI extracts structured requirements (skills categorized as mandatory/preferred/optional, education, experience, responsibilities, soft skills, certifications, domain knowledge) → store as structured data. Falls back to keyword-only when no AI key is configured. |
 | **Resume ↔ Job Matching Engine** | Multi-dimensional scoring: Skills Match (35%), Experience (20%), Tools (15%), Education (10%), Keyword Coverage (20%). Per-skill match/partial/gap status. Transparent, versioned scoring logic — AI extracts/classifies, backend computes ALL scores. |
+| **Tutorials** | Every catalog skill maps to YouTube tutorial courses (beginner → intermediate → advanced → interview prep). The `/app/tutorials` page ranks them from your resume (skills to strengthen) and your analyzed job descriptions (skills those roles want that you're missing — most-wanted first). Links also appear inline on the Skills page, the job-match breakdown, and each roadmap week. Links are targeted YouTube **searches**, so they never rot. |
 | **Skills / Roadmap / Assessments / Jobs / Projects / Applications** | Additional app sections that consume the data above (skill gap engine, a deterministic learning roadmap, an assessment catalog, job-description analysis with structured breakdowns, project recommendations). |
 
 The product loop: **Analyze → Measure → Choose a target → Learn → Build → Verify → Re-measure.**
@@ -198,13 +199,15 @@ src/
 │   ├── login/signup/…      auth pages
 │   ├── app.tsx             /app shell (auth gate, sidebar)
 │   └── app.*.tsx           dashboard, onboarding, career, resume, skills,
-│                           roadmap, jobs, assessments, projects, applications, settings
+│                           roadmap, tutorials, jobs, assessments, projects, applications, settings
 │
 ├── lib/
 │   ├── *-fns.ts            RPC wrappers — requireUser() → delegate
 │   ├── *.server.ts         business logic — explicit userId, DB access, never client-imported
 │   ├── jd-intelligence.server.ts   AI-powered JD structured extraction
 │   ├── match-engine.server.ts      multi-dimensional resume↔job scoring
+│   ├── tutorials-catalog.ts        skill → YouTube tutorial search links (pure)
+│   ├── tutorials.server.ts         ranks tutorials from resume + analyzed jobs
 │   ├── *-catalog.ts        reference data (skills, taxonomy, industries, degrees, …)
 │   ├── auth.ts / session.server.ts   better-auth config + "who is the caller"
 │   └── db/

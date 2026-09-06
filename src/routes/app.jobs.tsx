@@ -334,11 +334,23 @@ function JobMatchDetail({ jobId, onClose }: { jobId: string; onClose: () => void
                             {s.name}
                           </span>
                         </span>
-                        {s.studentLevel && (
-                          <span className="text-xs text-muted-foreground">
-                            you: {s.studentLevel}
-                          </span>
-                        )}
+                        <span className="flex items-center gap-2">
+                          {s.studentLevel && (
+                            <span className="text-xs text-muted-foreground">
+                              you: {s.studentLevel}
+                            </span>
+                          )}
+                          {s.status !== "match" && (
+                            <a
+                              href={s.tutorialUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs font-medium text-primary hover:underline"
+                            >
+                              Learn ↗
+                            </a>
+                          )}
+                        </span>
                       </li>
                     ))}
                   </ul>

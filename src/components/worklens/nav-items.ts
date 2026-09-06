@@ -10,6 +10,7 @@ import {
   Target,
   Rocket,
   FolderOpen,
+  Video,
   type LucideIcon,
 } from "lucide-react";
 
@@ -34,5 +35,6 @@ export const NAV_ITEMS: NavItem[] = [
   { to: "/app/applications", label: "Applications", icon: FolderOpen, gated: true },
   { to: "/app/assessments", label: "Assessments", icon: ClipboardCheck, gated: true },
   { to: "/app/roadmap", label: "Roadmap", icon: RouteIcon, gated: true },
+  { to: "/app/tutorials", label: "Tutorials", icon: Video, gated: true },
   { to: "/app/settings", label: "Settings", icon: Settings },
 ];

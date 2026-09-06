@@ -134,6 +134,16 @@ function Roadmap() {
                 <div>
                   <p className="text-xs text-muted-foreground">Week {w.week}</p>
                   <p className="font-medium">{w.topic}</p>
+                  {w.resourceUrl && (
+                    <a
+                      href={w.resourceUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-1 inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                    >
+                      Watch tutorials ↗
+                    </a>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   <Badge
