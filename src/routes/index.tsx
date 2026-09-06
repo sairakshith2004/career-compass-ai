@@ -37,9 +37,12 @@ export const Route = createFileRoute("/")({
       },
     ],
   }),
+  // The root path is an entry redirect, not a page: signed-in members go to the
+  // app, everyone else lands on the login screen. The marketing content below
+  // stays in the bundle but is no longer reachable at "/".
   beforeLoad: async () => {
     const user = await getCurrentUser();
-    if (user) throw redirect({ to: "/app" });
+    throw redirect({ to: user ? "/app" : "/login" });
   },
   component: Landing,
 });
