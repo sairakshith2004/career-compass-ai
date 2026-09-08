@@ -6,11 +6,8 @@ import { signUp } from "@/lib/auth-client";
 import { getSessionUser } from "@/lib/auth-guard";
 import { getEnabledProviders } from "@/lib/server-fns";
 import { checkPasswordPolicy, MIN_PASSWORD_LENGTH } from "@/lib/password";
-import {
-  OAuthProviders,
-  startSocialSignIn,
-  type OAuthProviderId,
-} from "@/components/worklens/OAuthProviders";
+import { OAuthProviders } from "@/components/worklens/OAuthProviders";
+import { startSocialSignIn, type OAuthProviderId } from "@/components/worklens/oauth";
 
 export const Route = createFileRoute("/signup")({
   head: () => ({

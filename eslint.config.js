@@ -43,5 +43,13 @@ export default tseslint.config(
       "@typescript-eslint/no-explicit-any": "off",
     },
   },
+  {
+    // Vendored shadcn/ui primitives export a component plus its `cva` variants
+    // from the same file by design — not a real fast-refresh hazard.
+    files: ["src/components/ui/**/*.{ts,tsx}"],
+    rules: {
+      "react-refresh/only-export-components": "off",
+    },
+  },
   eslintPluginPrettier,
 );

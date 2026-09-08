@@ -6,11 +6,8 @@ import { Sparkles } from "lucide-react";
 import { signIn } from "@/lib/auth-client";
 import { getSessionUser } from "@/lib/auth-guard";
 import { getEnabledProviders } from "@/lib/server-fns";
-import {
-  OAuthProviders,
-  startSocialSignIn,
-  type OAuthProviderId,
-} from "@/components/worklens/OAuthProviders";
+import { OAuthProviders } from "@/components/worklens/OAuthProviders";
+import { startSocialSignIn, type OAuthProviderId } from "@/components/worklens/oauth";
 
 const searchSchema = z.object({
   // Where to send the user after a successful sign-in. Constrained to an app-
